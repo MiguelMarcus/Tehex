@@ -42,6 +42,7 @@ const canvas = document.getElementById("mapCanvas");
       { id: "highlands", name: "Altitudes", terrains: ["hills", "mountain", "volcano"] },
       { id: "waters", name: "Aguas", terrains: ["water", "ocean", "swamp"] }
     ];
+    const borderColors = ["#55493b", "#77664b", "#9a7c49", "#2f6f78", "#6d4f69", "#ffffff"];
 
     const iconImages = {};
     [...terrains, ...Object.values(placeTypes)].forEach(item => {
@@ -64,6 +65,8 @@ const canvas = document.getElementById("mapCanvas");
       tool: "paint",
       terrain: "grass",
       paintShowIcon: true,
+      brushSize: 1,
+      borderColor: "#77664b",
       terrainIconScale: 1,
       terrainIconScales: {},
       placeIconScales: {},
@@ -82,6 +85,8 @@ const canvas = document.getElementById("mapCanvas");
     const els = {
       terrainGrid: document.getElementById("terrainGrid"),
       paintShowIcon: document.getElementById("paintShowIcon"),
+      brushSize: document.getElementById("brushSize"),
+      brushSizeValue: document.getElementById("brushSizeValue"),
       terrainIconScale: document.getElementById("terrainIconScale"),
       terrainIconScaleValue: document.getElementById("terrainIconScaleValue"),
       terrainIconScaleLabel: document.getElementById("terrainIconScaleLabel"),
@@ -101,6 +106,7 @@ const canvas = document.getElementById("mapCanvas");
       optionsBtn: document.getElementById("optionsBtn"),
       optionsMenu: document.getElementById("optionsMenu"),
       menuNewMapBtn: document.getElementById("menuNewMapBtn"),
+      mapOptionsBtn: document.getElementById("mapOptionsBtn"),
       savedMapsBtn: document.getElementById("savedMapsBtn"),
       mapTitle: document.getElementById("mapTitle"),
       newMapModal: document.getElementById("newMapModal"),
@@ -114,6 +120,10 @@ const canvas = document.getElementById("mapCanvas");
       savedMapsModal: document.getElementById("savedMapsModal"),
       closeSavedMapsBtn: document.getElementById("closeSavedMapsBtn"),
       savedMapList: document.getElementById("savedMapList"),
+      mapOptionsModal: document.getElementById("mapOptionsModal"),
+      closeMapOptionsBtn: document.getElementById("closeMapOptionsBtn"),
+      borderColorPalette: document.getElementById("borderColorPalette"),
+      mapSizeLabel: document.getElementById("mapSizeLabel"),
       saveBtn: document.getElementById("saveBtn"),
       saveStatus: document.getElementById("saveStatus"),
       exportJsonBtn: document.getElementById("exportJsonBtn"),
@@ -426,7 +436,7 @@ const canvas = document.getElementById("mapCanvas");
       if (cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
         drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), .78);
       }
-      ctx.strokeStyle = isOldSchool() ? "#000000" : "rgba(62, 55, 39, .20)";
+      ctx.strokeStyle = isOldSchool() ? "#000000" : state.borderColor;
       ctx.lineWidth = Math.max(.6, .75 * state.scale);
       ctx.stroke(path);
     }
@@ -755,23 +765,43 @@ const canvas = document.getElementById("mapCanvas");
     function handleCell(cellPos) {
       if (!cellPos) return;
       const { q, r } = cellPos;
-      const cell = cellAt(q, r);
       state.selected = { q, r };
       if (state.tool === "paint") {
-        cell.terrain = state.terrain;
-        cell.showIcon = state.paintShowIcon;
+        cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
+          const cell = cellAt(brushQ, brushR);
+          cell.terrain = state.terrain;
+          cell.showIcon = state.paintShowIcon;
+        });
       } else if (state.tool === "place") {
-        cell.place = { name: els.placeName.value.trim() || "Sem nome", type: els.placeType.value };
+        const cell = cellAt(q, r);
+        cell.place = { name: els.placeName.value.trim(), type: els.placeType.value };
       } else if (state.tool === "erase") {
-        cell.place = null;
-        cell.notes = "";
-        cell.terrain = "grass";
-        removeCellConnections(q, r);
+        cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
+          const cell = cellAt(brushQ, brushR);
+          cell.place = null;
+          cell.notes = "";
+          cell.terrain = "grass";
+          removeCellConnections(brushQ, brushR);
+        });
       }
       syncDetails();
       updatePlaces();
       scheduleSave();
       draw();
+    }
+
+    function cellsInBrush(q, r) {
+      if (state.brushSize === 1) return [{ q, r }];
+      const origin = hexToPixel(q, r);
+      const reach = state.hexSize * state.scale * Math.sqrt(3) * (state.brushSize - .35);
+      const cells = [];
+      for (let row = 0; row < state.rows; row++) {
+        for (let col = 0; col < state.cols; col++) {
+          const point = hexToPixel(col, row);
+          if (Math.hypot(point.x - origin.x, point.y - origin.y) <= reach) cells.push({ q: col, r: row });
+        }
+      }
+      return cells;
     }
 
     function startFreePath(pos) {
@@ -870,7 +900,7 @@ const canvas = document.getElementById("mapCanvas");
         const div = document.createElement("button");
         div.className = "place-item";
         div.innerHTML = "<strong></strong><span></span>";
-        div.querySelector("strong").textContent = item.place.name;
+        div.querySelector("strong").textContent = item.place.name || "Lugar sem nome";
         div.querySelector("span").textContent = (placeTypes[item.place.type]?.label || "Lugar") + " - " + item.coord;
         div.addEventListener("click", () => {
           const [q, r] = parseKey(item.coord);
@@ -944,12 +974,69 @@ const canvas = document.getElementById("mapCanvas");
       els.savedMapsModal.hidden = false;
     }
 
+    function buildBorderPalette() {
+      els.borderColorPalette.replaceChildren();
+      borderColors.forEach(color => {
+        const button = document.createElement("button");
+        button.className = "color-swatch";
+        button.style.background = color;
+        button.title = "Usar esta cor na borda";
+        button.dataset.color = color;
+        button.addEventListener("click", () => {
+          state.borderColor = color;
+          buildBorderPalette();
+          scheduleSave();
+          draw();
+        });
+        button.classList.toggle("active", color === state.borderColor);
+        els.borderColorPalette.appendChild(button);
+      });
+    }
+
+    function openMapOptions() {
+      els.optionsMenu.hidden = true;
+      els.mapSizeLabel.textContent = state.cols + " x " + state.rows;
+      buildBorderPalette();
+      els.mapOptionsModal.hidden = false;
+    }
+
+    function resizeMap(side, delta) {
+      const isColumn = side === "left" || side === "right";
+      if (delta < 0 && (isColumn ? state.cols : state.rows) <= 4) return;
+      const shiftQ = side === "left" && delta > 0 ? 1 : side === "left" && delta < 0 ? -1 : 0;
+      const shiftR = side === "top" && delta > 0 ? 1 : side === "top" && delta < 0 ? -1 : 0;
+      const nextCells = {};
+      Object.entries(state.cells).forEach(([cellKey, cell]) => {
+        let [q, r] = parseKey(cellKey);
+        q += shiftQ;
+        r += shiftR;
+        const nextCols = state.cols + (isColumn ? delta : 0);
+        const nextRows = state.rows + (!isColumn ? delta : 0);
+        if (q >= 0 && r >= 0 && q < nextCols && r < nextRows) nextCells[key(q, r)] = cell;
+      });
+      state.cols += isColumn ? delta : 0;
+      state.rows += !isColumn ? delta : 0;
+      state.cells = nextCells;
+      state.paths = state.paths.map(path => ({ ...path, points: path.points.map(([q, r]) => [q + shiftQ, r + shiftR]) }));
+      if (state.selected) {
+        const selected = { q: state.selected.q + shiftQ, r: state.selected.r + shiftR };
+        state.selected = selected.q >= 0 && selected.r >= 0 && selected.q < state.cols && selected.r < state.rows ? selected : null;
+      }
+      els.mapSizeLabel.textContent = state.cols + " x " + state.rows;
+      centerMap();
+      syncDetails();
+      updatePlaces();
+      scheduleSave();
+    }
+
     function exportState() {
       return {
         mapId: state.mapId,
         mapName: state.mapName,
         mapStyle: state.mapStyle,
         snapToEdges: state.snapToEdges,
+        brushSize: state.brushSize,
+        borderColor: state.borderColor,
         terrainIconScale: state.terrainIconScale,
         terrainIconScales: state.terrainIconScales,
         placeIconScales: state.placeIconScales,
@@ -970,6 +1057,8 @@ const canvas = document.getElementById("mapCanvas");
       state.mapName = data.mapName || "Mapa Hex Local";
       state.mapStyle = data.mapStyle === "oldschool" ? "oldschool" : "modern";
       state.snapToEdges = Boolean(data.snapToEdges);
+      state.brushSize = Math.max(1, Math.min(4, Number(data.brushSize) || 1));
+      state.borderColor = borderColors.includes(data.borderColor) ? data.borderColor : "#77664b";
       state.terrainIconScale = Math.max(.6, Math.min(1.6, Number(data.terrainIconScale) || 1));
       state.terrainIconScales = data.terrainIconScales || {};
       state.placeIconScales = data.placeIconScales || {};
@@ -982,6 +1071,8 @@ const canvas = document.getElementById("mapCanvas");
       state.lastPathCell = null;
       els.mapTitle.textContent = state.mapName;
       els.snapToEdges.checked = state.snapToEdges;
+      els.brushSize.value = state.brushSize;
+      els.brushSizeValue.textContent = state.brushSize + (state.brushSize === 1 ? " hex" : " hexes");
       updateTerrainScaleControl();
       updatePlacePreview();
       centerMap();
@@ -1013,6 +1104,8 @@ const canvas = document.getElementById("mapCanvas");
       state.mapName = data.name || "Mapa Hex Local";
       state.mapStyle = "modern";
       state.snapToEdges = false;
+      state.brushSize = 1;
+      state.borderColor = "#77664b";
       state.terrainIconScale = 1;
       state.terrainIconScales = {};
       state.placeIconScales = {};
@@ -1155,6 +1248,8 @@ const canvas = document.getElementById("mapCanvas");
       const chosen = els.styleOptions.querySelector("[data-style].active");
       state.mapStyle = chosen ? chosen.dataset.style : "modern";
       state.snapToEdges = false;
+      state.brushSize = 1;
+      state.borderColor = "#77664b";
       state.terrainIconScale = 1;
       state.terrainIconScales = {};
       state.placeIconScales = {};
@@ -1183,6 +1278,11 @@ const canvas = document.getElementById("mapCanvas");
       setTerrain("grass");
       updatePlacePreview();
       els.paintShowIcon.addEventListener("change", () => { state.paintShowIcon = els.paintShowIcon.checked; });
+      els.brushSize.addEventListener("input", () => {
+        state.brushSize = Number(els.brushSize.value);
+        els.brushSizeValue.textContent = state.brushSize + (state.brushSize === 1 ? " hex" : " hexes");
+        scheduleSave();
+      });
       els.terrainIconScale.addEventListener("input", () => {
         state.terrainIconScales[terrainGroupFor(state.terrain).id] = Number(els.terrainIconScale.value) / 100;
         els.terrainIconScaleValue.textContent = els.terrainIconScale.value + "%";
@@ -1222,6 +1322,7 @@ const canvas = document.getElementById("mapCanvas");
         els.optionsMenu.hidden = true;
         openNewMapDialog();
       });
+      els.mapOptionsBtn.addEventListener("click", openMapOptions);
       els.savedMapsBtn.addEventListener("click", openSavedMaps);
       els.closeNewMapBtn.addEventListener("click", closeNewMapDialog);
       els.cancelNewMapBtn.addEventListener("click", closeNewMapDialog);
@@ -1237,6 +1338,13 @@ const canvas = document.getElementById("mapCanvas");
       els.closeSavedMapsBtn.addEventListener("click", () => { els.savedMapsModal.hidden = true; });
       els.savedMapsModal.addEventListener("click", event => {
         if (event.target === els.savedMapsModal) els.savedMapsModal.hidden = true;
+      });
+      els.closeMapOptionsBtn.addEventListener("click", () => { els.mapOptionsModal.hidden = true; });
+      els.mapOptionsModal.addEventListener("click", event => {
+        if (event.target === els.mapOptionsModal) els.mapOptionsModal.hidden = true;
+      });
+      document.querySelectorAll("[data-resize]").forEach(button => {
+        button.addEventListener("click", () => resizeMap(button.dataset.resize, Number(button.dataset.delta)));
       });
       document.addEventListener("click", event => {
         if (!event.target.closest(".options-wrap")) els.optionsMenu.hidden = true;
