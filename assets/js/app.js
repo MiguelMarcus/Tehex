@@ -42,7 +42,7 @@ const canvas = document.getElementById("mapCanvas");
       { id: "highlands", name: "Altitudes", terrains: ["hills", "mountain", "volcano"] },
       { id: "waters", name: "Aguas", terrains: ["water", "ocean", "swamp"] }
     ];
-    const borderColors = ["#55493b", "#77664b", "#9a7c49", "#2f6f78", "#6d4f69", "#ffffff"];
+    const borderColors = ["none", "#000000", "#55493b", "#77664b", "#9a7c49", "#2f6f78", "#6d4f69", "#ffffff"];
 
     const iconImages = {};
     [...terrains, ...Object.values(placeTypes)].forEach(item => {
@@ -74,6 +74,7 @@ const canvas = document.getElementById("mapCanvas");
       cells: {},
       paths: [],
       currentPath: null,
+      selectedPathIndex: null,
       selected: null,
       lastPathCell: null,
       activePathKey: null,
@@ -124,6 +125,8 @@ const canvas = document.getElementById("mapCanvas");
       closeMapOptionsBtn: document.getElementById("closeMapOptionsBtn"),
       borderColorPalette: document.getElementById("borderColorPalette"),
       mapSizeLabel: document.getElementById("mapSizeLabel"),
+      deleteSelectedPathBtn: document.getElementById("deleteSelectedPathBtn"),
+      pathSelectionHint: document.getElementById("pathSelectionHint"),
       saveBtn: document.getElementById("saveBtn"),
       saveStatus: document.getElementById("saveStatus"),
       exportJsonBtn: document.getElementById("exportJsonBtn"),
@@ -335,16 +338,35 @@ const canvas = document.getElementById("mapCanvas");
 
     function draw() {
       const rect = canvas.getBoundingClientRect();
-      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.fillStyle = isOldSchool() ? "#ffffff" : "#f4ecd9";
+      ctx.fillRect(0, 0, rect.width, rect.height);
       for (let r = 0; r < state.rows; r++) {
         for (let q = 0; q < state.cols; q++) drawHex(q, r);
       }
+      ctx.save();
+      clipToMap();
       drawLegacyConnections("river");
       drawLegacyConnections("road");
       drawFreePaths("river");
       drawFreePaths("road");
-      drawSelectedHex();
       drawPlacesAndLabels();
+      ctx.restore();
+      drawSelectedHex();
+    }
+
+    function clipToMap() {
+      ctx.beginPath();
+      for (let r = 0; r < state.rows; r++) {
+        for (let q = 0; q < state.cols; q++) {
+          const p = hexToPixel(q, r);
+          hexCorners(p.x, p.y, state.hexSize * state.scale - .8).forEach(([x, y], index) => {
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.closePath();
+        }
+      }
+      ctx.clip();
     }
 
     function drawLegacyConnections(type) {
@@ -403,6 +425,10 @@ const canvas = document.getElementById("mapCanvas");
         }
         ctx.restore();
       });
+      if (state.selectedPathIndex !== null) {
+        const selected = state.paths[state.selectedPathIndex];
+        if (selected && selected.type === type) strokeSmoothPath(selected.points, "rgba(255,255,255,.94)", 1.5 * state.scale);
+      }
     }
 
     function strokeSmoothPath(points, color, width) {
@@ -436,9 +462,11 @@ const canvas = document.getElementById("mapCanvas");
       if (cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
         drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), .78);
       }
-      ctx.strokeStyle = isOldSchool() ? "#000000" : state.borderColor;
-      ctx.lineWidth = Math.max(.6, .75 * state.scale);
-      ctx.stroke(path);
+      if (state.borderColor !== "none") {
+        ctx.strokeStyle = isOldSchool() ? "#000000" : state.borderColor;
+        ctx.lineWidth = Math.max(.6, .75 * state.scale);
+        ctx.stroke(path);
+      }
     }
 
     function drawOrganicTexture(q, r, x, y, size, terrain) {
@@ -664,6 +692,7 @@ const canvas = document.getElementById("mapCanvas");
       els.terrainSection.hidden = tool !== "paint";
       els.placeSection.hidden = tool !== "place";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
+      updatePathSelectionUi();
     }
 
     function setTerrain(id) {
@@ -807,7 +836,16 @@ const canvas = document.getElementById("mapCanvas");
     function startFreePath(pos) {
       const snapped = snapToNearestHexEdge(pos);
       const point = pixelToWorld(snapped.x, snapped.y);
-      state.currentPath = { type: state.tool, points: [point] };
+      const selected = state.paths[state.selectedPathIndex];
+      if (selected && selected.type === state.tool) {
+        state.currentPath = state.paths.splice(state.selectedPathIndex, 1)[0];
+        state.selectedPathIndex = null;
+        const last = state.currentPath.points[state.currentPath.points.length - 1];
+        if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
+      } else {
+        state.currentPath = { type: state.tool, points: [point] };
+      }
+      updatePathSelectionUi();
       draw();
     }
 
@@ -832,6 +870,55 @@ const canvas = document.getElementById("mapCanvas");
         scheduleSave();
       }
       state.currentPath = null;
+      updatePathSelectionUi();
+      draw();
+    }
+
+    function distanceToSegment(point, a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length));
+      return Math.hypot(point.x - (a.x + dx * t), point.y - (a.y + dy * t));
+    }
+
+    function findPathAt(pos, type) {
+      const threshold = Math.max(10, state.hexSize * state.scale * .34);
+      let match = -1;
+      let distance = Infinity;
+      (state.paths || []).forEach((path, index) => {
+        if (path.type !== type) return;
+        for (let i = 1; i < path.points.length; i++) {
+          const current = distanceToSegment(pos, worldToPixel(path.points[i - 1]), worldToPixel(path.points[i]));
+          if (current < threshold && current < distance) {
+            match = index;
+            distance = current;
+          }
+        }
+      });
+      return match;
+    }
+
+    function selectPath(index) {
+      state.selectedPathIndex = index;
+      updatePathSelectionUi();
+      draw();
+    }
+
+    function updatePathSelectionUi() {
+      const path = state.paths[state.selectedPathIndex];
+      els.deleteSelectedPathBtn.disabled = !path;
+      els.pathSelectionHint.textContent = path
+        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Clique em uma area vazia para continuar pelo final do desenho."
+        : "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar ou continuar o traço.";
+    }
+
+    function deleteSelectedPath() {
+      if (state.selectedPathIndex === null) return;
+      state.paths.splice(state.selectedPathIndex, 1);
+      state.selectedPathIndex = null;
+      updatePathSelectionUi();
+      scheduleSave();
       draw();
     }
 
@@ -878,7 +965,7 @@ const canvas = document.getElementById("mapCanvas");
       const name = els.selectedName.value.trim();
       const type = els.selectedType.value;
       cell.notes = els.selectedNotes.value;
-      cell.place = type ? { name: name || placeTypes[type].label, type } : null;
+      cell.place = type ? { name, type } : null;
       updatePlaces();
       scheduleSave();
       draw();
@@ -979,8 +1066,9 @@ const canvas = document.getElementById("mapCanvas");
       borderColors.forEach(color => {
         const button = document.createElement("button");
         button.className = "color-swatch";
-        button.style.background = color;
-        button.title = "Usar esta cor na borda";
+        button.style.background = color === "none" ? "repeating-linear-gradient(135deg, #fffaf0 0 5px, #d6bd87 5px 7px)" : color;
+        button.title = color === "none" ? "Sem borda" : "Usar esta cor na borda";
+        if (color === "none") button.textContent = "/";
         button.dataset.color = color;
         button.addEventListener("click", () => {
           state.borderColor = color;
@@ -1188,10 +1276,58 @@ const canvas = document.getElementById("mapCanvas");
     }
 
     function exportPng() {
+      const dpr = window.devicePixelRatio || 1;
+      const old = {
+        width: canvas.width,
+        height: canvas.height,
+        styleWidth: canvas.style.width,
+        styleHeight: canvas.style.height,
+        scale: state.scale,
+        offsetX: state.offsetX,
+        offsetY: state.offsetY,
+        selected: state.selected,
+        currentPath: state.currentPath
+      };
+      const exportScale = 2.5;
+      const size = state.hexSize * exportScale;
+      const margin = Math.round(size * .9);
+      const titleHeight = 82;
+      const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
+      const height = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      canvas.width = width;
+      canvas.height = height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      state.scale = exportScale;
+      state.offsetX = margin + size * Math.sqrt(3) / 2;
+      state.offsetY = titleHeight + margin + size;
+      state.selected = null;
+      state.currentPath = null;
+      draw();
+      ctx.save();
+      ctx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "800 " + Math.round(24 * exportScale) + "px Georgia, 'Times New Roman', serif";
+      ctx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
+      ctx.restore();
+      const href = canvas.toDataURL("image/png");
+      canvas.style.width = old.styleWidth;
+      canvas.style.height = old.styleHeight;
+      canvas.width = old.width;
+      canvas.height = old.height;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      state.scale = old.scale;
+      state.offsetX = old.offsetX;
+      state.offsetY = old.offsetY;
+      state.selected = old.selected;
+      state.currentPath = old.currentPath;
       draw();
       const a = document.createElement("a");
-      a.download = "mapa-hex.png";
-      a.href = canvas.toDataURL("image/png");
+      const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase();
+      a.download = filename + ".png";
+      a.href = href;
       a.click();
     }
 
@@ -1277,6 +1413,7 @@ const canvas = document.getElementById("mapCanvas");
       buildPlacePalette();
       setTerrain("grass");
       updatePlacePreview();
+      updatePathSelectionUi();
       els.paintShowIcon.addEventListener("change", () => { state.paintShowIcon = els.paintShowIcon.checked; });
       els.brushSize.addEventListener("input", () => {
         state.brushSize = Number(els.brushSize.value);
@@ -1299,6 +1436,7 @@ const canvas = document.getElementById("mapCanvas");
         state.snapToEdges = els.snapToEdges.checked;
         scheduleSave();
       });
+      els.deleteSelectedPathBtn.addEventListener("click", deleteSelectedPath);
 
       document.querySelectorAll("[data-tool]").forEach(btn => {
         btn.addEventListener("click", () => setTool(btn.dataset.tool));
@@ -1365,11 +1503,26 @@ const canvas = document.getElementById("mapCanvas");
       state.isPainting = true;
       state.activePathKey = null;
       if (state.tool === "road" || state.tool === "river") {
+        const existing = findPathAt(pos, state.tool);
+        if (existing !== -1) {
+          state.isPainting = false;
+          selectPath(existing);
+          return;
+        }
         startFreePath(pos);
       } else {
         const cell = pixelToHex(pos.x, pos.y);
         if (cell) state.activePathKey = key(cell.q, cell.r);
-        if (state.tool === "erase") eraseFreePathsNear(pos);
+        if (state.tool === "erase") {
+          const existing = findPathAt(pos, "road");
+          const river = existing === -1 ? findPathAt(pos, "river") : -1;
+          if (existing !== -1 || river !== -1) {
+            state.isPainting = false;
+            selectPath(existing !== -1 ? existing : river);
+            return;
+          }
+          eraseFreePathsNear(pos);
+        }
         handleCell(cell);
       }
     });
