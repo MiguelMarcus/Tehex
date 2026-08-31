@@ -424,6 +424,15 @@
     .saved-map-item strong { color: #47331b; font-size: 14px; }
     .saved-map-item span { margin-top: 3px; color: #76634a; font-size: 12px; }
     .saved-map-empty { margin: 0; padding: 20px 6px; color: #76634a; text-align: center; }
+    .map-settings-block { padding: 0 0 16px; margin-bottom: 16px; border-bottom: 1px solid #d6bd87; }
+    .map-settings-block:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+    .map-settings-block h3 { margin: 0 0 8px; color: #5e4320; font-size: 13px; }
+    .color-palette { display: flex; flex-wrap: wrap; gap: 8px; }
+    .color-swatch { width: 34px; min-height: 34px; padding: 0; border-radius: 6px; }
+    .color-swatch.active { outline: 3px solid #9b700d; outline-offset: 2px; }
+    .map-resize-grid { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 8px; align-items: center; text-align: center; }
+    .map-resize-grid button { min-width: 0; font-size: 12px; padding: 7px 5px; }
+    .map-size { min-height: 36px; display: grid; place-items: center; border: 1px solid #d6bd87; border-radius: 7px; background: #fffaf0; color: #5e4320; font-size: 12px; font-weight: 800; }
 
     .mobile-toggle { display: none; }
 
@@ -449,3 +458,4 @@
       .status { width: 100%; text-align: left; }
       .style-options { grid-template-columns: 1fr; }
     }
+
