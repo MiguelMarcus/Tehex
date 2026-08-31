@@ -21,6 +21,7 @@
           <button id="optionsBtn" title="Opcoes do mapa">Opcoes</button>
           <div id="optionsMenu" class="options-menu" hidden>
             <button id="menuNewMapBtn">Novo mapa</button>
+            <button id="mapOptionsBtn">Opcoes do mapa</button>
             <button id="savedMapsBtn">Mapas salvos</button>
           </div>
         </div>
@@ -52,6 +53,7 @@
         <div class="terrain-grid" id="terrainGrid"></div>
         <div class="paint-options">
           <div class="toggle-row"><input id="paintShowIcon" type="checkbox" checked><label for="paintShowIcon">Mostrar icone neste hex</label></div>
+          <label class="range-row" for="brushSize">Tamanho do pincel: <span id="brushSizeValue">1 hex</span><input id="brushSize" type="range" min="1" max="4" step="1" value="1"></label>
           <label class="range-row" for="terrainIconScale"><span id="terrainIconScaleLabel">Tamanho do icone de Campo</span>: <span id="terrainIconScaleValue">100%</span><input id="terrainIconScale" type="range" min="60" max="160" value="100"></label>
         </div>
       </div>
@@ -185,6 +187,33 @@
       </div>
       <div class="dialog-body">
         <div id="savedMapList" class="saved-map-list"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="mapOptionsModal" class="modal" hidden>
+    <section class="new-map-dialog" role="dialog" aria-modal="true" aria-labelledby="mapOptionsHeading">
+      <div class="dialog-head">
+        <h2 id="mapOptionsHeading">Opcoes do mapa</h2>
+        <button id="closeMapOptionsBtn" class="dialog-close" title="Fechar">x</button>
+      </div>
+      <div class="dialog-body">
+        <div class="map-settings-block">
+          <h3>Cor da borda dos hexes</h3>
+          <div id="borderColorPalette" class="color-palette" aria-label="Paleta de cores"></div>
+        </div>
+        <div class="map-settings-block">
+          <h3>Adicionar ou remover hexes</h3>
+          <p class="hint">Expanda ou reduza o mapa por uma borda de cada vez.</p>
+          <div class="map-resize-grid">
+            <span></span><button data-resize="top" data-delta="1" title="Adicionar linha no topo">+ Topo</button><span></span>
+            <button data-resize="left" data-delta="1" title="Adicionar coluna a esquerda">+ Esquerda</button><span class="map-size" id="mapSizeLabel">28 x 20</span><button data-resize="right" data-delta="1" title="Adicionar coluna a direita">+ Direita</button>
+            <span></span><button data-resize="bottom" data-delta="1" title="Adicionar linha na base">+ Base</button><span></span>
+            <span></span><button data-resize="top" data-delta="-1" title="Remover linha do topo">- Topo</button><span></span>
+            <button data-resize="left" data-delta="-1" title="Remover coluna a esquerda">- Esquerda</button><span></span><button data-resize="right" data-delta="-1" title="Remover coluna a direita">- Direita</button>
+            <span></span><button data-resize="bottom" data-delta="-1" title="Remover linha da base">- Base</button><span></span>
+          </div>
+        </div>
       </div>
     </section>
   </div>
