@@ -4,12 +4,16 @@ Editor local de mapas hexagonais para criar terrenos, lugares, ruas e rios.
 
 ## Uso
 
-Abra `index.html` em um navegador. O editor salva os mapas neste navegador e permite exportar ou importar JSON e PNG.
+Abra `index.html` em um navegador ou acesse a versao publicada pelo GitHub Pages. O editor salva os mapas neste navegador e permite exportar ou importar JSON e PNG.
 
 ## Estrutura
 
-- `index.html`: aplicacao completa, sem dependencias externas.
+- `index.html`: estrutura semantica da aplicacao.
+- `assets/css/app.css`: estilos e layout.
+- `assets/js/app.js`: interface, desenho do mapa e ferramentas.
+- `assets/js/data/local-map-store.js`: camada de dados local, responsavel pelos mapas salvos.
 - `assets/hex-icons/`: icones SVG de terrenos e lugares.
+- `.github/workflows/deploy-pages.yml`: publicacao automatica no GitHub Pages.
 
 ## Recursos
 
