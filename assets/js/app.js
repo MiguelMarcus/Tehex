@@ -690,6 +690,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       MapRenderPerformance.forEachCell(range, (q, r) => {
+        const cell = cellAt(q, r);
         if (!cell.place || !cell.place.name) return;
         const p = hexToPixel(q, r);
         const text = cell.place.name;
