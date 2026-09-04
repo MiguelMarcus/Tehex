@@ -4,7 +4,7 @@ Editor local de mapas hexagonais para criar terrenos, lugares, ruas e rios.
 
 ## Uso
 
-Abra `index.html` em um navegador ou acesse a versao publicada pelo GitHub Pages. O editor salva os mapas neste navegador e permite exportar ou importar JSON e PNG.
+Abra `https://miguelmarcus.github.io/Tehex/` em um navegador. O editor salva os mapas neste navegador e permite exportar ou importar JSON e PNG.
 
 ## Estrutura
 
