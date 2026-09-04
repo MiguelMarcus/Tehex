@@ -62,10 +62,13 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     const exportProgress = ExportProgressOverlay.mount();
 
     const iconImages = {};
+    const iconLoadTasks = [];
     function loadCanvasSafeIcon(src) {
       const img = new Image();
-      img.onload = draw;
-      img.onerror = () => console.warn("Nao foi possivel carregar o icone", src);
+      let finishLoading;
+      iconLoadTasks.push(new Promise(resolve => { finishLoading = resolve; }));
+      img.onload = () => { finishLoading(); draw(); };
+      img.onerror = () => { finishLoading(); console.warn("Nao foi possivel carregar o icone", src); };
       // SVGs convertidos em data URL nao contaminam o canvas. No GitHub Pages
       // o fetch e same-origin; o fallback preserva os icones em file://.
       fetch(src)
@@ -76,6 +79,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         .then(svg => { img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); })
         .catch(() => { img.src = src; });
       return img;
+    }
+
+    function waitForIcons() {
+      return Promise.all(iconLoadTasks);
     }
     [...terrains, ...Object.values(placeTypes)].forEach(item => {
       iconImages[item.icon] = loadCanvasSafeIcon(item.icon);
@@ -401,7 +408,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     function renderNow() {
       const rect = canvas.getBoundingClientRect();
       const range = MapRenderPerformance.visibleRange(rect, state, pixelToWorld);
-      const quality = MapRenderPerformance.detailLevel(state.scale);
+      const quality = state.isExporting ? "detail" : MapRenderPerformance.detailLevel(state.scale);
       ctx.fillStyle = isOldSchool() ? "#ffffff" : "#f4ecd9";
       ctx.fillRect(0, 0, rect.width, rect.height);
       MapRenderPerformance.forEachCell(range, (q, r) => drawHex(q, r, quality));
@@ -1407,11 +1414,18 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
       const height = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
       try {
-        state.isExporting = true;
         exportProgress.show();
+        exportProgress.update(0, "Carregando todos os icones...");
+        await waitForIcons();
+        state.isExporting = true;
         state.scale = exportScale;
         state.selected = null;
         state.currentPath = null;
+        // Confirma visualmente a previsualizacao completa antes de iniciar a
+        // varredura por blocos usada para montar o PNG final.
+        renderNow();
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        exportProgress.update(0, "Iniciando renderizacao completa...");
         els.saveStatus.textContent = "Gerando PNG em partes...";
         const image = await PngExportService.renderInTiles({
           canvas,
