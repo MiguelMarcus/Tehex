@@ -1,0 +1,30 @@
+.place-label-editor {
+  display: grid;
+  gap: 9px;
+  margin-top: -4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface-muted);
+}
+
+.place-label-editor__title {
+  color: var(--text-secondary);
+  font-family: Manrope, Inter, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.place-label-editor__field { display: grid; gap: 4px; color: var(--text-secondary); font-size: 11px; }
+.place-label-editor__range { display: grid; grid-template-columns: 1fr 52px; align-items: center; gap: 8px; }
+.place-label-editor__range input[type="number"] { min-width: 0; padding: 4px; font-size: 11px; font-variant-numeric: tabular-nums; text-align: center; }
+.place-label-editor__colors { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.place-label-editor input[type="color"] { width: 100%; height: 30px; padding: 2px; cursor: pointer; }
+.place-label-editor__visibility { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 12px; }
+.place-label-editor__visibility input { width: 14px; height: 14px; }
+.place-label-editor__styles { display: grid; gap: 6px; padding-top: 9px; border-top: 1px solid var(--line); }
+.place-label-editor__style-actions { display: flex; gap: 5px; }
+.place-label-editor__style-actions button { min-height: 28px; padding: 4px 8px; font-size: 11px; }

@@ -43,6 +43,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     });
     document.getElementById("optionsMenu").appendChild(headerActions);
 
+    document.querySelector('label[for="selectedName"]').textContent = "Texto no mapa";
+    const textScaleRow = document.createElement("label");
+    textScaleRow.className = "range-row text-size-control";
+    textScaleRow.htmlFor = "selectedTextScale";
+    textScaleRow.innerHTML = 'Tamanho do texto: <span id="selectedTextScaleValue">100%</span><input id="selectedTextScale" type="range" min="60" max="160" value="100">';
+    document.getElementById("selectedName").closest(".form-row").after(textScaleRow);
+
+    const editLabelSection = document.createElement("section");
+    editLabelSection.id = "editLabelSection";
+    editLabelSection.className = "section context-section";
+    editLabelSection.hidden = true;
+    editLabelSection.innerHTML = '<h2>Rótulo do local</h2><div id="editLabelEditor"></div>';
+    document.querySelector(".left-panel > .section").after(editLabelSection);
+
     const canvas = document.getElementById("mapCanvas");
     const ctx = canvas.getContext("2d");
 
@@ -98,6 +112,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       terrainSection: document.getElementById("terrainSection"),
       placeSection: document.getElementById("placeSection"),
       pathAssistSection: document.getElementById("pathAssistSection"),
+      editLabelSection: document.getElementById("editLabelSection"),
+      editLabelEditor: document.getElementById("editLabelEditor"),
       placeName: document.getElementById("placeName"),
       placeType: document.getElementById("placeType"),
       placePreviewIcon: document.getElementById("placePreviewIcon"),
@@ -144,6 +160,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       toggleRightPanelBtn: document.getElementById("toggleRightPanelBtn"),
       selectedCoord: document.getElementById("selectedCoord"),
       selectedName: document.getElementById("selectedName"),
+      selectedTextScale: document.getElementById("selectedTextScale"),
+      selectedTextScaleValue: document.getElementById("selectedTextScaleValue"),
       selectedType: document.getElementById("selectedType"),
       selectedNotes: document.getElementById("selectedNotes"),
       applyDetailsBtn: document.getElementById("applyDetailsBtn"),
@@ -152,7 +170,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function key(q, r) { return q + "," + r; }
     function parseKey(k) { return k.split(",").map(Number); }
-    function terrainById(id) { return terrains.find(t => t.id === id) || terrains[0]; }
+    function terrainById(id) {
+      const legacyId = { hill: "hills", desert: "sand" }[id] || id;
+      return terrains.find(t => t.id === legacyId) || terrains[0];
+    }
     function terrainGroupFor(id) { return terrainGroups.find(group => group.terrains.includes(id)) || terrainGroups[0]; }
     function isOldSchool() { return state.mapStyle === "oldschool"; }
     function displayColor(color) {
@@ -279,6 +300,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       return closest && closest.distance <= Math.max(12, state.hexSize * state.scale * .34) ? closest : pos;
     }
 
+    function snapToHexCenter(pos) {
+      const cell = pixelToHex(pos.x, pos.y);
+      return cell ? hexToPixel(cell.q, cell.r) : pos;
+    }
+
+    function snapPathPoint(pos, useEdges) {
+      if (!useEdges) return snapToHexCenter(pos);
+      const previous = state.snapToEdges;
+      state.snapToEdges = true;
+      const point = snapToNearestHexEdge(pos);
+      state.snapToEdges = previous;
+      return point;
+    }
+
     function hexPath(x, y, size) {
       const p = new Path2D();
       for (let i = 0; i < 6; i++) {
@@ -353,16 +388,21 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       for (let r = 0; r < state.rows; r++) {
         for (let q = 0; q < state.cols; q++) drawHex(q, r);
       }
+      BiomeBorderRenderer.draw(ctx, {
+        state, cellAt, terrainById, neighborEdges, hexToPixel, hexCorners,
+        displayColor, blendColors, hash, isOldSchool
+      });
       ctx.save();
       clipToMap();
       drawLegacyConnections("river");
       drawLegacyConnections("road");
       drawFreePaths("river");
       drawFreePaths("road");
-      drawPlacesAndLabels();
+      drawPlaces();
       ctx.restore();
       drawSelectedHex();
       drawBrushPreview();
+      drawPlaceLabels();
     }
 
     function clipToMap() {
@@ -484,7 +524,6 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.fillStyle = shade(displayColor(terrain.color), variation);
       ctx.fill(path);
       drawPaperTexture(q, r, p.x, p.y, size);
-      drawTerrainEdges(q, r, p.x, p.y, size, terrain);
       if (cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
         drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), .78);
       }
@@ -519,67 +558,6 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         ctx.bezierCurveTo(x - size * .2, yy + 8, x + size * .15, yy - 8, x + size * .55, yy + 3);
         ctx.stroke();
       }
-      ctx.restore();
-    }
-
-    function drawTerrainEdges(q, r, x, y, size, terrain) {
-      if (isOldSchool()) return;
-      const corners = hexCorners(x, y, size);
-      const hex = hexPath(x, y, size);
-      neighborEdges(q, r).forEach(({ q: nq, r: nr, edge }) => {
-        if (nq < 0 || nr < 0 || nq >= state.cols || nr >= state.rows) return;
-        const neighbor = cellAt(nq, nr);
-        if (neighbor.terrain === terrain.id) return;
-        const a = corners[edge];
-        const b = corners[(edge + 1) % 6];
-        const neighborTerrain = terrainById(neighbor.terrain);
-        ctx.save();
-        ctx.clip(hex);
-        const sharedQ = q + nq;
-        const sharedR = r + nr;
-        const sharedEdge = Math.min(edge, (edge + 3) % 6);
-        const neighborColor = displayColor(neighborTerrain.color);
-        drawOrganicEdgePatch(sharedQ, sharedR, sharedEdge, a, b, x, y, size, neighborColor, .19, .15);
-        drawOrganicEdgePatch(sharedQ, sharedR, sharedEdge + 17, a, b, x, y, size, shade(neighborColor, -8), .10, .08);
-        ctx.restore();
-      });
-    }
-
-    function drawOrganicEdgePatch(q, r, edge, a, b, x, y, size, color, alpha, depth) {
-      const steps = 6;
-      const inner = [];
-      const amplitude = .72 + hash(q, r, edge * 11 + 301) * .25;
-      const frequency = 1 + Math.floor(hash(q, r, edge * 13 + 503) * 2);
-      const phase = hash(q, r, edge * 17 + 701) * Math.PI * 2;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const edgeX = a[0] + (b[0] - a[0]) * t;
-        const edgeY = a[1] + (b[1] - a[1]) * t;
-        const envelope = Math.sin(t * Math.PI);
-        const wave = 1 + Math.sin(t * Math.PI * frequency + phase) * .14;
-        const noisyDepth = Math.max(0, depth * envelope * amplitude * wave + (hash(q, r, edge * 43 + i) - .5) * .009);
-        inner.push([
-          edgeX + (x - edgeX) * noisyDepth,
-          edgeY + (y - edgeY) * noisyDepth
-        ]);
-      }
-      ctx.save();
-      ctx.fillStyle = color;
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.moveTo(a[0], a[1]);
-      ctx.lineTo(b[0], b[1]);
-      ctx.lineTo(inner[inner.length - 1][0], inner[inner.length - 1][1]);
-      for (let i = inner.length - 2; i >= 0; i--) {
-        const current = inner[i + 1];
-        const next = inner[i];
-        const midX = (current[0] + next[0]) / 2;
-        const midY = (current[1] + next[1]) / 2;
-        ctx.quadraticCurveTo(current[0], current[1], midX, midY);
-      }
-      ctx.quadraticCurveTo(inner[0][0], inner[0][1], a[0], a[1]);
-      ctx.closePath();
-      ctx.fill();
       ctx.restore();
     }
 
@@ -653,7 +631,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     function drawPlace(place, x, y, size) {
       const type = placeTypes[place.type] || placeTypes.settlement;
       ctx.save();
-      const badgeY = y - size * .2;
+      const hasVisibleLabel = Boolean(place.name) && place.showLabel !== false;
+      const badgeY = place.iconPosition === "center" || (place.iconPosition !== "top" && !hasVisibleLabel) ? y : y - size * .2;
       const radius = size * .34;
       ctx.shadowColor = "rgba(58, 35, 18, .28)";
       ctx.shadowBlur = 4 * state.scale;
@@ -670,17 +649,21 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.beginPath();
       ctx.arc(x, badgeY, radius - 4 * state.scale, 0, Math.PI * 2);
       ctx.stroke();
-      drawSvgIcon(type.icon, x, badgeY, size * .48 * (state.placeIconScales[place.type] || 1), .96);
+      drawSvgIcon(type.icon, x, badgeY, size * .48 * (place.iconScale || state.placeIconScales[place.type] || 1), .96);
       ctx.restore();
     }
 
-    function drawPlacesAndLabels() {
+    function drawPlaces() {
       Object.entries(state.cells).forEach(([k, cell]) => {
         if (!cell.place) return;
         const [q, r] = parseKey(k);
         const p = hexToPixel(q, r);
         drawPlace(cell.place, p.x, p.y, state.hexSize * state.scale - .8);
       });
+    }
+
+    function drawPlaceLabels() {
+      if (state.scale <= .6) return;
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
@@ -689,22 +672,22 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         const [q, r] = parseKey(k);
         const p = hexToPixel(q, r);
         const text = cell.place.name;
-        const fontSize = Math.max(16, Math.min(34, 24 * state.scale));
-        const y = p.y + state.hexSize * state.scale * .18;
-        ctx.font = "800 " + fontSize + "px Georgia, 'Times New Roman', serif";
+        const textScale = Math.max(.6, Math.min(1.6, Number(cell.place.textScale) || 1));
+        const fontSize = Math.max(12, Math.min(48, 24 * state.scale * textScale));
+        if (cell.place.showLabel === false) return;
+        const isAbove = cell.place.labelPosition === "top";
+        const y = isAbove ? p.y - state.hexSize * state.scale * .58 : p.y + state.hexSize * state.scale * .18;
+        ctx.textBaseline = isAbove ? "bottom" : "top";
+        ctx.font = "600 " + fontSize + "px " + (cell.place.labelFont || "Georgia, serif");
         ctx.lineJoin = "round";
         ctx.miterLimit = 2;
-        ctx.shadowColor = "rgba(70, 42, 20, .42)";
-        ctx.shadowBlur = 2 * state.scale;
-        ctx.shadowOffsetY = 2 * state.scale;
-        ctx.lineWidth = Math.max(5, fontSize * .24);
-        ctx.strokeStyle = isOldSchool() ? "#252522" : "#5a321f";
-        ctx.strokeText(text, p.x, y);
-        ctx.lineWidth = Math.max(2, fontSize * .11);
-        ctx.strokeStyle = isOldSchool() ? "#f5f5ee" : "#f3dfba";
-        ctx.strokeText(text, p.x, y);
         ctx.shadowColor = "transparent";
-        ctx.fillStyle = isOldSchool() ? "#151513" : "#3b2318";
+        if (cell.place.labelBorder !== false) {
+          ctx.lineWidth = Math.max(5, fontSize * .3);
+          ctx.strokeStyle = cell.place.borderColor || (isOldSchool() ? "#ffffff" : "#fff9f0");
+          ctx.strokeText(text, p.x, y);
+        }
+        ctx.fillStyle = cell.place.textColor || (isOldSchool() ? "#151513" : "#3b2318");
         ctx.fillText(text, p.x, y);
       });
       ctx.restore();
@@ -732,7 +715,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.terrainSection.hidden = tool !== "paint";
       els.placeSection.hidden = tool !== "place";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
+      els.editLabelSection.hidden = tool !== "select";
       updatePathSelectionUi();
+      if (tool === "select") renderSelectedLabelEditor();
       draw();
     }
 
@@ -906,16 +891,17 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function startFreePath(pos) {
-      const snapped = snapToNearestHexEdge(pos);
-      const point = pixelToWorld(snapped.x, snapped.y);
       const selected = state.paths[state.selectedPathIndex];
+      const useEdges = selected && selected.type === state.tool ? Boolean(selected.snapToEdges) : state.snapToEdges;
+      const snapped = snapPathPoint(pos, useEdges);
+      const point = pixelToWorld(snapped.x, snapped.y);
       if (selected && selected.type === state.tool) {
         state.currentPath = state.paths.splice(state.selectedPathIndex, 1)[0];
         state.selectedPathIndex = null;
         const last = state.currentPath.points[state.currentPath.points.length - 1];
         if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
       } else {
-        state.currentPath = { type: state.tool, snapToEdges: state.snapToEdges, points: [point] };
+        state.currentPath = { type: state.tool, snapToEdges: state.snapToEdges, snapToCenters: !state.snapToEdges, points: [point] };
       }
       updatePathSelectionUi();
       draw();
@@ -923,7 +909,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function addFreePathPoint(pos) {
       if (!state.currentPath) return;
-      const snapped = snapToNearestHexEdge(pos);
+      const snapped = snapPathPoint(pos, state.currentPath.snapToEdges);
       const point = pixelToWorld(snapped.x, snapped.y);
       const points = state.currentPath.points;
       const last = points[points.length - 1];
@@ -1018,16 +1004,52 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       if (!state.selected) {
         els.selectedCoord.value = "-";
         els.selectedName.value = "";
+        els.selectedTextScale.value = 100;
+        els.selectedTextScaleValue.textContent = "100%";
         els.selectedType.value = "";
         els.selectedNotes.value = "";
+        if (state.tool === "select") renderSelectedLabelEditor();
         return;
       }
       const { q, r } = state.selected;
       const cell = cellAt(q, r);
       els.selectedCoord.value = q + ", " + r;
       els.selectedName.value = cell.place ? cell.place.name : "";
+      const textScale = cell.place ? Math.round((Number(cell.place.textScale) || 1) * 100) : 100;
+      els.selectedTextScale.value = textScale;
+      els.selectedTextScaleValue.textContent = textScale + "%";
       els.selectedType.value = cell.place ? cell.place.type : "";
       els.selectedNotes.value = cell.notes || "";
+      if (state.tool === "select") renderSelectedLabelEditor();
+    }
+
+    function renderSelectedLabelEditor() {
+      els.editLabelEditor.replaceChildren();
+      if (!state.selected) {
+        els.editLabelEditor.textContent = "Selecione um local no mapa para editar o rótulo.";
+        els.editLabelEditor.className = "hint";
+        return;
+      }
+      const cell = cellAt(state.selected.q, state.selected.r);
+      if (!cell.place) {
+        els.editLabelEditor.textContent = "Este hex não possui um local. Adicione um usando a ferramenta Lugar.";
+        els.editLabelEditor.className = "hint";
+        return;
+      }
+      els.editLabelEditor.className = "";
+      els.editLabelEditor.appendChild(PlaceLabelEditor.create(cell.place, {
+        icons: Object.entries(placeTypes).map(([id, item]) => ({ id, label: item.label })),
+        onChange: changes => {
+        cell.place = { ...cell.place, ...changes };
+        els.selectedName.value = changes.name;
+        els.selectedTextScale.value = Math.round(changes.textScale * 100);
+        els.selectedTextScaleValue.textContent = els.selectedTextScale.value + "%";
+        els.selectedType.value = changes.type;
+        updatePlaces();
+        scheduleSave();
+        draw();
+        }
+      }));
     }
 
     function applyDetails() {
@@ -1037,7 +1059,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const name = els.selectedName.value.trim();
       const type = els.selectedType.value;
       cell.notes = els.selectedNotes.value;
-      cell.place = type ? { name, type } : null;
+      cell.place = type ? { ...cell.place, name, type, textScale: Number(els.selectedTextScale.value) / 100 } : null;
       updatePlaces();
       scheduleSave();
       draw();
@@ -1068,7 +1090,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           const rect = canvas.getBoundingClientRect();
           state.offsetX += rect.width / 2 - p.x;
           state.offsetY += rect.height / 2 - p.y;
+          setTool("select");
           syncDetails();
+          updatePlaces();
           draw();
         });
         els.placeList.appendChild(div);
@@ -1330,16 +1354,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function download(filename, content, type) {
-      const blob = new Blob([content], { type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      DownloadService.saveText(content, filename, type);
     }
 
-    function exportPng() {
+    async function exportPng() {
+      const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase() + ".png";
+      let fileHandle = null;
+      if (typeof window.showSaveFilePicker === "function") {
+        try {
+          fileHandle = await DownloadService.requestPngFile(filename);
+        } catch (error) {
+          if (error.name !== "AbortError") console.error("Falha ao escolher o arquivo PNG", error);
+          return;
+        }
+      }
       const dpr = window.devicePixelRatio || 1;
       const old = {
         width: canvas.width,
@@ -1352,47 +1380,62 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         selected: state.selected,
         currentPath: state.currentPath
       };
-      const exportScale = 2.5;
+      const requestedScale = 2.5;
+      const maxExportSide = 3072;
+      const maxScaleByWidth = maxExportSide / (state.hexSize * (Math.sqrt(3) * state.cols + 1.8));
+      const maxScaleByHeight = maxExportSide / (state.hexSize * (1.5 * (state.rows - 1) + 3.8));
+      const exportScale = Math.min(requestedScale, maxScaleByWidth, maxScaleByHeight);
       const size = state.hexSize * exportScale;
       const margin = Math.round(size * .9);
       const titleHeight = 82;
       const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
       const height = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
-      canvas.style.width = width + "px";
-      canvas.style.height = height + "px";
-      canvas.width = width;
-      canvas.height = height;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      state.scale = exportScale;
-      state.offsetX = margin + size * Math.sqrt(3) / 2;
-      state.offsetY = titleHeight + margin + size;
-      state.selected = null;
-      state.currentPath = null;
-      draw();
-      ctx.save();
-      ctx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "800 " + Math.round(24 * exportScale) + "px Georgia, 'Times New Roman', serif";
-      ctx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
-      ctx.restore();
-      const href = canvas.toDataURL("image/png");
-      canvas.style.width = old.styleWidth;
-      canvas.style.height = old.styleHeight;
-      canvas.width = old.width;
-      canvas.height = old.height;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      state.scale = old.scale;
-      state.offsetX = old.offsetX;
-      state.offsetY = old.offsetY;
-      state.selected = old.selected;
-      state.currentPath = old.currentPath;
-      draw();
-      const a = document.createElement("a");
-      const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase();
-      a.download = filename + ".png";
-      a.href = href;
-      a.click();
+      try {
+        state.scale = exportScale;
+        state.selected = null;
+        state.currentPath = null;
+        els.saveStatus.textContent = "Gerando PNG em partes...";
+        const image = await PngExportService.renderInTiles({
+          canvas,
+          ctx,
+          width,
+          height,
+          renderTile: (tileX, tileY) => {
+            state.offsetX = margin + size * Math.sqrt(3) / 2 - tileX;
+            state.offsetY = titleHeight + margin + size - tileY;
+            draw();
+          },
+          onProgress: (completed, total) => {
+            els.saveStatus.textContent = "Gerando PNG: " + Math.round(completed / total * 100) + "%";
+          }
+        });
+        const imageCtx = image.getContext("2d");
+        imageCtx.save();
+        imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
+        imageCtx.textAlign = "center";
+        imageCtx.textBaseline = "middle";
+        imageCtx.font = "800 " + Math.round(24 * exportScale) + "px Georgia, 'Times New Roman', serif";
+        imageCtx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
+        imageCtx.restore();
+        const png = await PngExportService.toBlob(image);
+        await DownloadService.savePng(png, filename, fileHandle);
+        els.saveStatus.textContent = "PNG salvo";
+      } catch (error) {
+        console.error("Falha ao exportar PNG", error);
+        els.saveStatus.textContent = "Nao foi possivel exportar o PNG";
+      } finally {
+        canvas.style.width = old.styleWidth;
+        canvas.style.height = old.styleHeight;
+        canvas.width = old.width;
+        canvas.height = old.height;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        state.scale = old.scale;
+        state.offsetX = old.offsetX;
+        state.offsetY = old.offsetY;
+        state.selected = old.selected;
+        state.currentPath = old.currentPath;
+        draw();
+      }
     }
 
     function centerMap() {
@@ -1481,6 +1524,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       updatePlacePreview();
       updatePathSelectionUi();
       els.paintShowIcon.addEventListener("change", () => { state.paintShowIcon = els.paintShowIcon.checked; });
+      els.selectedTextScale.addEventListener("input", () => {
+        els.selectedTextScaleValue.textContent = els.selectedTextScale.value + "%";
+      });
       els.brushSize.addEventListener("input", () => {
         state.brushSize = Number(els.brushSize.value);
         els.brushSizeValue.textContent = state.brushSize + (state.brushSize === 1 ? " hex" : " hexes");

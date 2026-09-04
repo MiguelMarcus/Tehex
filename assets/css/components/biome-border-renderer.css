@@ -1,0 +1,7 @@
+/* Adjustable pigment strengths for the canvas biome-boundary renderer. */
+#mapCanvas {
+  --biome-border-wash-opacity: 0.27;
+  --biome-border-core-opacity: 0.31;
+  --biome-border-inset: 1.40;
+  --biome-border-junction-opacity: 0.20;
+}
