@@ -65,9 +65,9 @@
   function draw(ctx, options) {
     const {
       state, cellAt, terrainById, neighborEdges, hexToPixel, hexCorners,
-      displayColor, blendColors, hash, isOldSchool
+      displayColor, blendColors, hash, isOldSchool, range, quality
     } = options;
-    if (isOldSchool()) return;
+    if (isOldSchool() || quality === "overview") return;
 
     const washOpacity = cssNumber(ctx.canvas, "--biome-border-wash-opacity", 0.2);
     const coreOpacity = cssNumber(ctx.canvas, "--biome-border-core-opacity", 0.13);
@@ -77,8 +77,12 @@
     const seenEdges = new Set();
     const junctions = new Map();
 
-    for (let r = 0; r < state.rows; r++) {
-      for (let q = 0; q < state.cols; q++) {
+    const minR = range ? range.minR : 0;
+    const maxR = range ? range.maxR : state.rows - 1;
+    const minQ = range ? range.minQ : 0;
+    const maxQ = range ? range.maxQ : state.cols - 1;
+    for (let r = minR; r <= maxR; r++) {
+      for (let q = minQ; q <= maxQ; q++) {
         const terrain = terrainById(cellAt(q, r).terrain);
         neighborEdges(q, r).forEach(({ q: nq, r: nr, edge }) => {
           if (nq < 0 || nr < 0 || nq >= state.cols || nr >= state.rows) return;

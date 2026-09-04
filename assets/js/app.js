@@ -168,6 +168,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       placeList: document.getElementById("placeList")
     };
 
+    els.newMapCols.max = 300;
+    els.newMapRows.max = 200;
+
     function key(q, r) { return q + "," + r; }
     function parseKey(k) { return k.split(",").map(Number); }
     function terrainById(id) {
@@ -381,55 +384,57 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       draw();
     }
 
-    function draw() {
+    function renderNow() {
       const rect = canvas.getBoundingClientRect();
+      const range = MapRenderPerformance.visibleRange(rect, state, pixelToWorld);
+      const quality = MapRenderPerformance.detailLevel(state.scale);
       ctx.fillStyle = isOldSchool() ? "#ffffff" : "#f4ecd9";
       ctx.fillRect(0, 0, rect.width, rect.height);
-      for (let r = 0; r < state.rows; r++) {
-        for (let q = 0; q < state.cols; q++) drawHex(q, r);
-      }
+      MapRenderPerformance.forEachCell(range, (q, r) => drawHex(q, r, quality));
       BiomeBorderRenderer.draw(ctx, {
         state, cellAt, terrainById, neighborEdges, hexToPixel, hexCorners,
-        displayColor, blendColors, hash, isOldSchool
+        displayColor, blendColors, hash, isOldSchool, range, quality
       });
       ctx.save();
-      clipToMap();
-      drawLegacyConnections("river");
-      drawLegacyConnections("road");
+      clipToMap(range);
+      drawLegacyConnections("river", range);
+      drawLegacyConnections("road", range);
       drawFreePaths("river");
       drawFreePaths("road");
-      drawPlaces();
+      drawPlaces(range);
       ctx.restore();
       drawSelectedHex();
       drawBrushPreview();
-      drawPlaceLabels();
+      drawPlaceLabels(range);
     }
 
-    function clipToMap() {
+    const scheduleRender = MapRenderPerformance.createFrameScheduler(renderNow);
+    function draw() { scheduleRender(); }
+
+    function clipToMap(range) {
       ctx.beginPath();
-      for (let r = 0; r < state.rows; r++) {
-        for (let q = 0; q < state.cols; q++) {
+      MapRenderPerformance.forEachCell(range, (q, r) => {
           const p = hexToPixel(q, r);
           hexCorners(p.x, p.y, state.hexSize * state.scale - .8).forEach(([x, y], index) => {
             if (index === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           });
           ctx.closePath();
-        }
-      }
+      });
       ctx.clip();
     }
 
-    function drawLegacyConnections(type) {
+    function drawLegacyConnections(type, range) {
       ctx.save();
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = isOldSchool() ? "#000000" : (type === "road" ? "rgba(111, 71, 32, .9)" : "rgba(36, 111, 174, .92)");
       ctx.lineWidth = (type === "road" ? 6 : 8) * state.scale;
       const seen = new Set();
-      Object.entries(state.cells).forEach(([from, cell]) => {
+      MapRenderPerformance.forEachCell(range, (q1, r1) => {
+        const from = key(q1, r1);
+        const cell = cellAt(q1, r1);
         const list = type === "road" ? cell.roads || [] : cell.rivers || [];
-        const [q1, r1] = parseKey(from);
         const p1 = hexToPixel(q1, r1);
         list.forEach(to => {
           const id = [from, to].sort().join("|");
@@ -514,7 +519,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.stroke();
     }
 
-    function drawHex(q, r) {
+    function drawHex(q, r, quality) {
       const cell = cellAt(q, r);
       const p = hexToPixel(q, r);
       const size = state.hexSize * state.scale - .8;
@@ -523,9 +528,14 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const variation = Math.round((hash(q, r, 1) - .5) * 8);
       ctx.fillStyle = shade(displayColor(terrain.color), variation);
       ctx.fill(path);
-      drawPaperTexture(q, r, p.x, p.y, size);
-      if (cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
-        drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), .78);
+      if (quality === "detail") drawPaperTexture(q, r, p.x, p.y, size);
+      const isLargeMap = state.cols * state.rows > 40 * 40;
+      const iconDensity = isLargeMap ? .2 : quality === "standard" ? .5 : 1;
+      const previewIcon = quality !== "overview" && hash(q, r, 703) < iconDensity;
+      if (previewIcon && cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
+        const iconQualityScale = isLargeMap ? .72 : quality === "detail" ? 1 : .7;
+        const iconOpacity = isLargeMap ? .46 : .78;
+        drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * iconQualityScale * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), iconOpacity);
       }
       if (state.borderColor !== "none") {
         ctx.strokeStyle = isOldSchool() ? "#000000" : state.borderColor;
@@ -621,7 +631,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function drawSvgIcon(src, x, y, size, alpha = .85) {
       const img = iconImages[src];
-      if (!img || !img.complete) return;
+      if (!img || !img.complete || !img.naturalWidth || !img.naturalHeight) return;
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
@@ -653,23 +663,22 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.restore();
     }
 
-    function drawPlaces() {
-      Object.entries(state.cells).forEach(([k, cell]) => {
+    function drawPlaces(range) {
+      MapRenderPerformance.forEachCell(range, (q, r) => {
+        const cell = cellAt(q, r);
         if (!cell.place) return;
-        const [q, r] = parseKey(k);
         const p = hexToPixel(q, r);
         drawPlace(cell.place, p.x, p.y, state.hexSize * state.scale - .8);
       });
     }
 
-    function drawPlaceLabels() {
+    function drawPlaceLabels(range) {
       if (state.scale <= .6) return;
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      Object.entries(state.cells).forEach(([k, cell]) => {
+      MapRenderPerformance.forEachCell(range, (q, r) => {
         if (!cell.place || !cell.place.name) return;
-        const [q, r] = parseKey(k);
         const p = hexToPixel(q, r);
         const text = cell.place.name;
         const textScale = Math.max(.6, Math.min(1.6, Number(cell.place.textScale) || 1));
@@ -1359,15 +1368,6 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     async function exportPng() {
       const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase() + ".png";
-      let fileHandle = null;
-      if (typeof window.showSaveFilePicker === "function") {
-        try {
-          fileHandle = await DownloadService.requestPngFile(filename);
-        } catch (error) {
-          if (error.name !== "AbortError") console.error("Falha ao escolher o arquivo PNG", error);
-          return;
-        }
-      }
       const dpr = window.devicePixelRatio || 1;
       const old = {
         width: canvas.width,
@@ -1403,7 +1403,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           renderTile: (tileX, tileY) => {
             state.offsetX = margin + size * Math.sqrt(3) / 2 - tileX;
             state.offsetY = titleHeight + margin + size - tileY;
-            draw();
+            renderNow();
           },
           onProgress: (completed, total) => {
             els.saveStatus.textContent = "Gerando PNG: " + Math.round(completed / total * 100) + "%";
@@ -1418,8 +1418,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         imageCtx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
         imageCtx.restore();
         const png = await PngExportService.toBlob(image);
-        await DownloadService.savePng(png, filename, fileHandle);
-        els.saveStatus.textContent = "PNG salvo";
+        const link = DownloadService.createDownloadLink(png, filename);
+        els.saveStatus.replaceChildren(link);
+        link.click();
       } catch (error) {
         console.error("Falha ao exportar PNG", error);
         els.saveStatus.textContent = "Nao foi possivel exportar o PNG";
@@ -1484,8 +1485,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function createNewMap() {
-      state.cols = Math.max(6, Math.min(80, Number(els.newMapCols.value) || 28));
-      state.rows = Math.max(6, Math.min(60, Number(els.newMapRows.value) || 20));
+      state.cols = Math.max(6, Math.min(300, Number(els.newMapCols.value) || 28));
+      state.rows = Math.max(6, Math.min(200, Number(els.newMapRows.value) || 20));
       state.mapName = els.newMapName.value.trim() || "Mapa sem nome";
       state.mapId = createMapId();
       const chosen = els.styleOptions.querySelector("[data-style].active");
