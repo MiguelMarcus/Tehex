@@ -1,3 +1,4 @@
+(function () {
 const terrains = [
   { id: "grass", name: "Campo", color: "#9cab58", edge: "#81954d", icon: "assets/hex-icons/catalog/high-grass.svg" },
   { id: "forest", name: "Floresta", color: "#3d602e", edge: "#5f7e3f", icon: "assets/hex-icons/catalog/pine-tree.svg" },
@@ -26,3 +27,4 @@ const terrainGroups = [
 const borderColors = ["none", "#000000", "#55493b", "#77664b", "#9a7c49", "#2f6f78", "#6d4f69", "#ffffff"];
 
 window.MapCatalog = { terrains, placeTypes, terrainGroups, borderColors };
+})();

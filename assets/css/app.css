@@ -225,6 +225,26 @@
       color: #665641;
     }
 
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+    }
+
+    .section-toggle:hover { background: transparent; border-color: transparent; color: var(--accent-dark); }
+    .section-toggle::after { content: "⌄"; color: var(--accent); font-size: 18px; line-height: .7; transition: transform .15s ease; }
+    .section.is-collapsed .section-toggle::after { transform: rotate(-90deg); }
+    .section.is-collapsed .section-content { display: none; }
+
     .tool-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));

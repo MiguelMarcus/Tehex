@@ -1,0 +1,13 @@
+.modal { backdrop-filter: blur(5px); }
+.new-map-dialog { border-color: #cdb67f; border-radius: 14px; box-shadow: 0 26px 75px rgba(32, 27, 17, .36); }
+.dialog-head { padding: 16px 20px; background: linear-gradient(135deg, #f3dfad, #ead09a); }
+.dialog-body { padding: 20px; }
+.dialog-actions { padding: 14px 20px; background: rgba(249, 239, 216, .72); }
+.style-card { border-radius: 10px; transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease; }
+.style-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+
+@media (max-width: 980px) {
+  header { padding: 10px 12px; }
+  aside { padding: 14px; }
+  .right-panel { padding-top: 56px; }
+}

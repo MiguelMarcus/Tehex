@@ -2,6 +2,47 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     window.AppShell.mountApp(document.getElementById("app"));
 
+    const brand = document.querySelector(".brand");
+    brand.querySelector(".mark + div").classList.add("brand-copy");
+    brand.appendChild(document.querySelector(".options-wrap"));
+
+    function addButtonIcon(id, icon) {
+      const button = document.getElementById(id);
+      if (!button) return;
+      const label = button.textContent.trim();
+      button.innerHTML = `<i class="bi bi-${icon}" aria-hidden="true"></i><span>${label}</span>`;
+      button.classList.add("button-icon");
+    }
+
+    {
+      const icons = {
+        optionsBtn: "sliders2",
+        menuNewMapBtn: "file-earmark-plus",
+        mapOptionsBtn: "gear",
+        savedMapsBtn: "collection",
+        saveBtn: "floppy",
+        exportJsonBtn: "filetype-json",
+        exportPngBtn: "image",
+        importBtn: "box-arrow-in-down",
+        zoomOut: "dash-lg",
+        zoomIn: "plus-lg",
+        centerBtn: "bullseye"
+      };
+      Object.entries(icons).forEach(([id, icon]) => addButtonIcon(id, icon));
+      document.querySelectorAll("[data-tool]").forEach(button => {
+        const iconsByTool = { paint: "brush", place: "geo-alt", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
+        const label = button.textContent.trim();
+        button.innerHTML = `<i class="bi bi-${iconsByTool[button.dataset.tool]}" aria-hidden="true"></i><span>${label}</span>`;
+      });
+    }
+
+    const headerActions = document.createElement("div");
+    headerActions.className = "options-menu-actions";
+    ["saveBtn", "exportJsonBtn", "exportPngBtn", "importBtn", "importFile"].forEach(id => {
+      headerActions.appendChild(document.getElementById(id));
+    });
+    document.getElementById("optionsMenu").appendChild(headerActions);
+
     const canvas = document.getElementById("mapCanvas");
     const ctx = canvas.getContext("2d");
 
@@ -215,20 +256,25 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       if (!state.snapToEdges) return pos;
       const cell = pixelToHex(pos.x, pos.y);
       if (!cell) return pos;
-      const center = hexToPixel(cell.q, cell.r);
-      const corners = hexCorners(center.x, center.y, state.hexSize * state.scale - .8);
       let closest = null;
-      for (let i = 0; i < 6; i++) {
-        const a = corners[i];
-        const b = corners[(i + 1) % 6];
-        const dx = b[0] - a[0];
-        const dy = b[1] - a[1];
-        const lengthSq = dx * dx + dy * dy || 1;
-        const t = Math.max(0, Math.min(1, ((pos.x - a[0]) * dx + (pos.y - a[1]) * dy) / lengthSq));
-        const x = a[0] + dx * t;
-        const y = a[1] + dy * t;
-        const distance = Math.hypot(pos.x - x, pos.y - y);
-        if (!closest || distance < closest.distance) closest = { x, y, distance };
+      for (let r = cell.r - 1; r <= cell.r + 1; r++) {
+        for (let q = cell.q - 1; q <= cell.q + 1; q++) {
+          if (q < 0 || r < 0 || q >= state.cols || r >= state.rows) continue;
+          const center = hexToPixel(q, r);
+          const corners = hexCorners(center.x, center.y, state.hexSize * state.scale - .8);
+          for (let i = 0; i < 6; i++) {
+            const a = corners[i];
+            const b = corners[(i + 1) % 6];
+            const dx = b[0] - a[0];
+            const dy = b[1] - a[1];
+            const lengthSq = dx * dx + dy * dy || 1;
+            const t = Math.max(0, Math.min(1, ((pos.x - a[0]) * dx + (pos.y - a[1]) * dy) / lengthSq));
+            const x = a[0] + dx * t;
+            const y = a[1] + dy * t;
+            const distance = Math.hypot(pos.x - x, pos.y - y);
+            if (!closest || distance < closest.distance) closest = { x, y, distance };
+          }
+        }
       }
       return closest && closest.distance <= Math.max(12, state.hexSize * state.scale * .34) ? closest : pos;
     }
@@ -379,20 +425,21 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         ctx.save();
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
+        const strokePath = path.snapToEdges ? strokeLinearPath : strokeSmoothPath;
         if (type === "river") {
-          strokeSmoothPath(path.points, isOldSchool() ? "#000000" : "rgba(31, 82, 128, .78)", 9 * state.scale);
-          strokeSmoothPath(path.points, isOldSchool() ? "#ffffff" : "rgba(83, 157, 205, .95)", 3 * state.scale);
-          if (!isOldSchool()) strokeSmoothPath(path.points, "rgba(168, 220, 238, .85)", 2.2 * state.scale);
+          strokePath(path.points, isOldSchool() ? "#000000" : "rgba(31, 82, 128, .78)", 9 * state.scale);
+          strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(83, 157, 205, .95)", 3 * state.scale);
+          if (!isOldSchool()) strokePath(path.points, "rgba(168, 220, 238, .85)", 2.2 * state.scale);
         } else {
-          strokeSmoothPath(path.points, isOldSchool() ? "#000000" : "rgba(78, 48, 23, .72)", 7 * state.scale);
-          strokeSmoothPath(path.points, isOldSchool() ? "#ffffff" : "rgba(183, 139, 75, .95)", 3 * state.scale);
-          if (!isOldSchool()) strokeSmoothPath(path.points, "rgba(226, 197, 132, .92)", 1.6 * state.scale);
+          strokePath(path.points, isOldSchool() ? "#000000" : "rgba(78, 48, 23, .72)", 7 * state.scale);
+          strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(183, 139, 75, .95)", 3 * state.scale);
+          if (!isOldSchool()) strokePath(path.points, "rgba(226, 197, 132, .92)", 1.6 * state.scale);
         }
         ctx.restore();
       });
       if (state.selectedPathIndex !== null) {
         const selected = state.paths[state.selectedPathIndex];
-        if (selected && selected.type === type) strokeSmoothPath(selected.points, "rgba(255,255,255,.94)", 1.5 * state.scale);
+        if (selected && selected.type === type) (selected.snapToEdges ? strokeLinearPath : strokeSmoothPath)(selected.points, "rgba(255,255,255,.94)", 1.5 * state.scale);
       }
     }
 
@@ -410,6 +457,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       }
       const last = worldToPixel(points[points.length - 1]);
       ctx.lineTo(last.x, last.y);
+      ctx.stroke();
+    }
+
+    function strokeLinearPath(points, color, width) {
+      if (points.length < 2) return;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      const first = worldToPixel(points[0]);
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < points.length; i++) {
+        const point = worldToPixel(points[i]);
+        ctx.lineTo(point.x, point.y);
+      }
       ctx.stroke();
     }
 
@@ -675,10 +736,30 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       draw();
     }
 
+    function makeSectionsCollapsible() {
+      document.querySelectorAll("aside .section > h2").forEach(heading => {
+        const section = heading.parentElement;
+        const content = document.createElement("div");
+        content.className = "section-content";
+        while (heading.nextSibling) content.appendChild(heading.nextSibling);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "section-toggle";
+        button.textContent = heading.textContent;
+        button.setAttribute("aria-expanded", "true");
+        button.addEventListener("click", () => {
+          const collapsed = section.classList.toggle("is-collapsed");
+          button.setAttribute("aria-expanded", String(!collapsed));
+        });
+        heading.replaceChildren(button);
+        section.appendChild(content);
+      });
+    }
+
     function toggleRightPanel() {
       const minimized = els.rightPanel.classList.toggle("is-minimized");
       document.querySelector(".app").classList.toggle("right-panel-minimized", minimized);
-      els.toggleRightPanelBtn.textContent = minimized ? "‹" : "›";
+      els.toggleRightPanelBtn.innerHTML = `<i class="bi bi-chevron-${minimized ? "left" : "right"}" aria-hidden="true"></i>`;
       const label = minimized ? "Mostrar painel lateral" : "Minimizar painel lateral";
       els.toggleRightPanelBtn.title = label;
       els.toggleRightPanelBtn.setAttribute("aria-label", label);
@@ -834,7 +915,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         const last = state.currentPath.points[state.currentPath.points.length - 1];
         if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
       } else {
-        state.currentPath = { type: state.tool, points: [point] };
+        state.currentPath = { type: state.tool, snapToEdges: state.snapToEdges, points: [point] };
       }
       updatePathSelectionUi();
       draw();
@@ -1006,11 +1087,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function getSavedMaps() {
-      return LocalMapStore.list();
-    }
-
-    function saveMapLibrary(items) {
-      LocalMapStore.saveLibrary(items);
+      return MapPersistence.list();
     }
 
     function updateSavedMapList() {
@@ -1036,7 +1113,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         open.textContent = map.id === state.mapId ? "Aberto" : "Abrir";
         open.disabled = map.id === state.mapId;
         open.addEventListener("click", () => {
-          const saved = LocalMapStore.load(map.id);
+          const saved = MapPersistence.load(map.id);
           if (!saved) return;
           importState(saved);
           els.savedMapsModal.hidden = true;
@@ -1225,20 +1302,16 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     function saveLocal() {
       if (!state.mapId) state.mapId = createMapId();
       const project = exportState();
-      const item = { id: state.mapId, name: state.mapName, style: state.mapStyle, cols: state.cols, rows: state.rows, updatedAt: new Date().toISOString() };
-      const maps = getSavedMaps().filter(map => map.id !== state.mapId);
-      maps.push(item);
-      saveMapLibrary(maps);
-      LocalMapStore.save(project);
-      els.saveStatus.textContent = "Salvo neste navegador";
+      const result = MapPersistence.save(project);
+      els.saveStatus.textContent = result.ok ? "Salvo neste navegador" : "Nao foi possivel salvar neste navegador";
     }
 
     function loadLocal() {
-      const current = LocalMapStore.loadCurrent();
+      const current = MapPersistence.loadCurrent();
       if (!current) {
         const recent = getSavedMaps().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
         if (recent) {
-          const saved = LocalMapStore.load(recent.id);
+          const saved = MapPersistence.load(recent.id);
           if (saved) {
             importState(saved);
             return;
@@ -1399,6 +1472,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function initControls() {
+      els.toggleRightPanelBtn.innerHTML = '<i class="bi bi-chevron-right" aria-hidden="true"></i>';
+      makeSectionsCollapsible();
       populatePlaceTypes();
       buildTerrainPalette();
       buildPlacePalette();

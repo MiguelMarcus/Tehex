@@ -1,0 +1,69 @@
+body {
+  background:
+    radial-gradient(circle at 20% -10%, rgba(27, 107, 228, .14), transparent 31%),
+    linear-gradient(90deg, rgba(146, 94, 17, .045) 1px, transparent 1px),
+    linear-gradient(rgba(146, 94, 17, .035) 1px, transparent 1px),
+    var(--paper);
+}
+
+header {
+  min-height: 54px;
+  padding: 7px 14px;
+  overflow: visible;
+  border-bottom-color: var(--amber-200);
+  background: rgba(255, 253, 249, .94);
+  box-shadow: 0 2px 12px rgba(72, 55, 31, .05);
+}
+
+.mark {
+  width: 32px;
+  height: 32px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 5px 12px rgba(32, 93, 90, .22);
+}
+
+.brand h1 { color: var(--blue-900); font-size: 14px; letter-spacing: -.02em; }
+.subtle { margin-top: 1px; font-size: 10px; }
+.brand-copy { display: none; }
+
+.app { grid-template-columns: 270px minmax(0, 1fr) 285px; grid-template-rows: 54px minmax(0, 1fr); }
+.app.right-panel-minimized { grid-template-columns: 270px minmax(0, 1fr) 42px; }
+
+aside {
+  padding: 10px;
+  background: linear-gradient(180deg, #fffaf2, var(--amber-100));
+}
+
+.left-panel { box-shadow: 5px 0 18px rgba(76, 57, 32, .025); }
+.right-panel { background: linear-gradient(180deg, #fffaf2, var(--amber-100)); box-shadow: -5px 0 18px rgba(76, 57, 32, .025); }
+
+.workspace {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(27, 107, 228, .15), transparent 27%),
+    radial-gradient(circle at 80% 78%, rgba(228, 148, 27, .14), transparent 26%),
+    var(--amber-100);
+}
+
+.floating {
+  padding: 7px;
+  border-color: rgba(169, 150, 117, .6);
+  border-radius: 12px;
+  background: rgba(255, 253, 247, .9);
+  box-shadow: var(--shadow-sm);
+}
+
+.status { color: var(--text-secondary); font-weight: 600; }
+
+.section { margin-bottom: 8px; padding: 8px; border: 1px solid var(--amber-200); border-radius: 10px; background: rgba(255, 250, 242, .88); }
+.section:last-child { margin-bottom: 0; }
+.section h2 { margin-bottom: 6px; color: var(--ink); font-size: 11px; font-weight: 600; letter-spacing: .08em; }
+
+.place-list { padding-right: 3px; }
+.place-item { border-color: #e2d8c7; box-shadow: 0 2px 7px rgba(68, 49, 24, .04); }
+.place-item:hover { border-color: var(--blue-300); }
+
+@media (max-width: 980px) {
+  .app, .app.right-panel-minimized {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto min(72vh, 760px) auto;
+  }
+}
