@@ -59,6 +59,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     const canvas = document.getElementById("mapCanvas");
     const ctx = canvas.getContext("2d");
+    const exportProgress = ExportProgressOverlay.mount();
 
     const iconImages = {};
     function loadCanvasSafeIcon(src) {
@@ -85,6 +86,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       rows: 20,
       hexSize: 31,
       scale: 1,
+      isExporting: false,
       offsetX: 80,
       offsetY: 70,
       mapName: "Mapa Hex Local",
@@ -541,7 +543,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.fillStyle = shade(displayColor(terrain.color), variation);
       ctx.fill(path);
       if (quality === "detail") drawPaperTexture(q, r, p.x, p.y, size);
-      const isLargeMap = state.cols * state.rows > 40 * 40;
+      const isLargeMap = !state.isExporting && state.cols * state.rows > 40 * 40;
       const iconDensity = isLargeMap ? .2 : quality === "standard" ? .5 : 1;
       const previewIcon = quality !== "overview" && hash(q, r, 703) < iconDensity;
       if (previewIcon && cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
@@ -1391,7 +1393,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         offsetX: state.offsetX,
         offsetY: state.offsetY,
         selected: state.selected,
-        currentPath: state.currentPath
+        currentPath: state.currentPath,
+        isExporting: state.isExporting
       };
       const requestedScale = 2.5;
       const maxExportSide = 3072;
@@ -1404,6 +1407,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
       const height = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
       try {
+        state.isExporting = true;
+        exportProgress.show();
         state.scale = exportScale;
         state.selected = null;
         state.currentPath = null;
@@ -1419,7 +1424,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
             renderNow();
           },
           onProgress: (completed, total) => {
-            els.saveStatus.textContent = "Gerando PNG: " + Math.round(completed / total * 100) + "%";
+            const progress = Math.round(completed / total * 100);
+            exportProgress.update(progress, "Renderizando mapa: " + progress + "%");
           }
         });
         const imageCtx = image.getContext("2d");
@@ -1431,6 +1437,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         imageCtx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
         imageCtx.restore();
         const png = await PngExportService.toBlob(image);
+        exportProgress.update(100, "Preparando download...");
         const link = DownloadService.createDownloadLink(png, filename);
         els.saveStatus.replaceChildren(link);
         link.click();
@@ -1448,6 +1455,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state.offsetY = old.offsetY;
         state.selected = old.selected;
         state.currentPath = old.currentPath;
+        state.isExporting = old.isExporting;
+        exportProgress.hide();
         draw();
       }
     }

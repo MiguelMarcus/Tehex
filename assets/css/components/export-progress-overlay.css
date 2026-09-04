@@ -1,0 +1,48 @@
+.export-progress-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(29 34 28 / 32%);
+  backdrop-filter: blur(5px);
+}
+
+.export-progress-overlay[hidden] { display: none; }
+
+.export-progress-card {
+  width: min(330px, calc(100vw - 48px));
+  padding: 22px;
+  color: #253228;
+  background: #fffdf8;
+  border: 1px solid #c7d1c2;
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgb(22 32 23 / 22%);
+}
+
+.export-progress-kicker {
+  display: block;
+  margin-bottom: 7px;
+  color: #59705c;
+  font: 600 10px/1.2 Inter, sans-serif;
+  letter-spacing: .11em;
+}
+
+.export-progress-card strong { font: 600 14px/1.35 Manrope, sans-serif; }
+
+.export-progress-track {
+  height: 6px;
+  margin-top: 16px;
+  overflow: hidden;
+  background: #e4e9e1;
+  border-radius: 999px;
+}
+
+.export-progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #435e47;
+  border-radius: inherit;
+  transition: width .14s linear;
+}
