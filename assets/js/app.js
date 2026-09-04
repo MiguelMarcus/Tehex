@@ -61,11 +61,23 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     const ctx = canvas.getContext("2d");
 
     const iconImages = {};
-    [...terrains, ...Object.values(placeTypes)].forEach(item => {
+    function loadCanvasSafeIcon(src) {
       const img = new Image();
       img.onload = draw;
-      img.src = item.icon;
-      iconImages[item.icon] = img;
+      img.onerror = () => console.warn("Nao foi possivel carregar o icone", src);
+      // SVGs convertidos em data URL nao contaminam o canvas. No GitHub Pages
+      // o fetch e same-origin; o fallback preserva os icones em file://.
+      fetch(src)
+        .then(response => {
+          if (!response.ok) throw new Error("Icone indisponivel");
+          return response.text();
+        })
+        .then(svg => { img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); })
+        .catch(() => { img.src = src; });
+      return img;
+    }
+    [...terrains, ...Object.values(placeTypes)].forEach(item => {
+      iconImages[item.icon] = loadCanvasSafeIcon(item.icon);
     });
 
     const state = {
