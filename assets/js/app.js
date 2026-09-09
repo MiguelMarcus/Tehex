@@ -22,6 +22,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         savedMapsBtn: "collection",
         saveBtn: "floppy",
         exportJsonBtn: "filetype-json",
+        undoBtn: "arrow-counterclockwise",
+        redoBtn: "arrow-clockwise",
         exportPngBtn: "image",
         importBtn: "box-arrow-in-down",
         zoomOut: "dash-lg",
@@ -47,7 +49,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     const textScaleRow = document.createElement("label");
     textScaleRow.className = "range-row text-size-control";
     textScaleRow.htmlFor = "selectedTextScale";
-    textScaleRow.innerHTML = 'Tamanho do texto: <span id="selectedTextScaleValue">100%</span><input id="selectedTextScale" type="range" min="60" max="160" value="100">';
+    textScaleRow.innerHTML = 'Tamanho do texto: <span id="selectedTextScaleValue">100%</span><input id="selectedTextScale" type="range" min="60" max="300" value="100">';
     document.getElementById("selectedName").closest(".form-row").after(textScaleRow);
 
     const editLabelSection = document.createElement("section");
@@ -114,12 +116,15 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       selectedPathIndex: null,
       selected: null,
       lastPathCell: null,
+      pathDrag: null,
       activePathKey: null,
       hoveredBrush: null,
       isPainting: false,
       isPanning: false,
       panStart: null
     };
+
+    let history;
 
     const els = {
       terrainGrid: document.getElementById("terrainGrid"),
@@ -168,6 +173,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       deleteSelectedPathBtn: document.getElementById("deleteSelectedPathBtn"),
       pathSelectionHint: document.getElementById("pathSelectionHint"),
       saveBtn: document.getElementById("saveBtn"),
+      undoBtn: document.getElementById("undoBtn"),
+      redoBtn: document.getElementById("redoBtn"),
       saveStatus: document.getElementById("saveStatus"),
       exportJsonBtn: document.getElementById("exportJsonBtn"),
       exportPngBtn: document.getElementById("exportPngBtn"),
@@ -202,6 +209,26 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     function isOldSchool() { return state.mapStyle === "oldschool"; }
     function displayColor(color) {
       return isOldSchool() ? "#ffffff" : color;
+    }
+
+    function oldSchoolTerrainColor(terrain) {
+      const tones = {
+        grass: "#d0d0d0",
+        forest: "#bcbcbc",
+        denseForest: "#aaaaaa",
+        willowForest: "#c4c4c4",
+        deadForest: "#a6a6a6",
+        hills: "#c0c0c0",
+        mountain: "#969696",
+        volcano: "#858585",
+        water: "#b8b8b8",
+        ocean: "#a0a0a0",
+        swamp: "#b2b2b2",
+        mushroom: "#bebebe",
+        sand: "#dddddd",
+        snow: "#e5e5e5"
+      };
+      return tones[terrain.id] || "#d0d0d0";
     }
     function cellAt(q, r) {
       const k = key(q, r);
@@ -409,7 +436,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const rect = canvas.getBoundingClientRect();
       const range = MapRenderPerformance.visibleRange(rect, state, pixelToWorld);
       const quality = state.isExporting ? "detail" : MapRenderPerformance.detailLevel(state.scale);
-      ctx.fillStyle = isOldSchool() ? "#ffffff" : "#f4ecd9";
+      ctx.fillStyle = isOldSchool() ? "#d8d8d8" : "#f4ecd9";
       ctx.fillRect(0, 0, rect.width, rect.height);
       MapRenderPerformance.forEachCell(range, (q, r) => drawHex(q, r, quality));
       BiomeBorderRenderer.draw(ctx, {
@@ -505,8 +532,29 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       });
       if (state.selectedPathIndex !== null) {
         const selected = state.paths[state.selectedPathIndex];
-        if (selected && selected.type === type) (selected.snapToEdges ? strokeLinearPath : strokeSmoothPath)(selected.points, "rgba(255,255,255,.94)", 1.5 * state.scale);
+        if (selected && selected.type === type) {
+          (selected.snapToEdges ? strokeLinearPath : strokeSmoothPath)(selected.points, "rgba(255,255,255,.94)", 1.5 * state.scale);
+          drawPathEndpoints(selected, type);
+        }
+      } else if (state.currentPath && state.currentPath.type === type) {
+        drawPathEndpoints(state.currentPath, type);
       }
+    }
+
+    function drawPathEndpoints(path, type) {
+      if (!path.points || path.points.length < 2) return;
+      ctx.save();
+      path.points.slice(0, 1).concat(path.points.slice(-1)).forEach(point => {
+        const pixel = worldToPixel(point);
+        ctx.beginPath();
+        ctx.fillStyle = type === "river" ? "#4e9bd0" : "#c18a42";
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = Math.max(2, 2 * state.scale);
+        ctx.arc(pixel.x, pixel.y, Math.max(6, 6 * state.scale), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
     }
 
     function strokeSmoothPath(points, color, width) {
@@ -514,15 +562,23 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
       ctx.beginPath();
-      const first = worldToPixel(points[0]);
-      ctx.moveTo(first.x, first.y);
-      for (let i = 1; i < points.length - 1; i++) {
-        const current = worldToPixel(points[i]);
-        const next = worldToPixel(points[i + 1]);
-        ctx.quadraticCurveTo(current.x, current.y, (current.x + next.x) / 2, (current.y + next.y) / 2);
+      const pixels = points.map(worldToPixel);
+      ctx.moveTo(pixels[0].x, pixels[0].y);
+      for (let i = 0; i < pixels.length - 1; i++) {
+        const previous = pixels[Math.max(0, i - 1)];
+        const current = pixels[i];
+        const next = pixels[i + 1];
+        const following = pixels[Math.min(pixels.length - 1, i + 2)];
+        const control1 = {
+          x: current.x + (next.x - previous.x) / 6,
+          y: current.y + (next.y - previous.y) / 6
+        };
+        const control2 = {
+          x: next.x - (following.x - current.x) / 6,
+          y: next.y - (following.y - current.y) / 6
+        };
+        ctx.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, next.x, next.y);
       }
-      const last = worldToPixel(points[points.length - 1]);
-      ctx.lineTo(last.x, last.y);
       ctx.stroke();
     }
 
@@ -546,8 +602,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const size = state.hexSize * state.scale - .8;
       const terrain = terrainById(cell.terrain);
       const path = hexPath(p.x, p.y, size);
-      const variation = Math.round((hash(q, r, 1) - .5) * 8);
-      ctx.fillStyle = shade(displayColor(terrain.color), variation);
+      const baseColor = isOldSchool() ? oldSchoolTerrainColor(terrain) : displayColor(terrain.color);
+      const variation = Math.round((hash(q, r, 1) - .5) * (isOldSchool() ? 10 : 8));
+      ctx.fillStyle = shade(baseColor, variation);
       ctx.fill(path);
       if (quality === "detail") drawPaperTexture(q, r, p.x, p.y, size);
       const isLargeMap = !state.isExporting && state.cols * state.rows > 40 * 40;
@@ -593,19 +650,34 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function drawPaperTexture(q, r, x, y, size) {
-      if (isOldSchool()) return;
       const path = hexPath(x, y, size);
       ctx.save();
       ctx.clip(path);
-      for (let i = 0; i < 12; i++) {
+      const oldSchool = isOldSchool();
+      const count = oldSchool ? 20 : 12;
+      for (let i = 0; i < count; i++) {
         const px = x + (hash(q, r, i + 500) - .5) * size * 1.45;
         const py = y + (hash(q, r, i + 700) - .5) * size * 1.25;
-        const radius = .42 + hash(q, r, i + 900) * .9;
-        ctx.globalAlpha = .035 + hash(q, r, i + 1000) * .025;
-        ctx.fillStyle = i % 3 === 0 ? "#2a2418" : "#fff2c8";
+        const radius = oldSchool ? .55 + hash(q, r, i + 900) * 1.05 : .42 + hash(q, r, i + 900) * .9;
+        ctx.globalAlpha = oldSchool ? .045 + hash(q, r, i + 1000) * .035 : .035 + hash(q, r, i + 1000) * .025;
+        ctx.fillStyle = oldSchool
+          ? (i % 3 === 0 ? "#4a4a4a" : "#f4f4f4")
+          : (i % 3 === 0 ? "#2a2418" : "#fff2c8");
         ctx.beginPath();
         ctx.arc(px, py, radius * state.scale, 0, Math.PI * 2);
         ctx.fill();
+      }
+      if (oldSchool) {
+        ctx.globalAlpha = .08;
+        ctx.strokeStyle = "#666666";
+        ctx.lineWidth = Math.max(.35, state.scale * .35);
+        for (let i = 0; i < 3; i++) {
+          const yy = y - size * .45 + (i + 1) * size * .3 + (hash(q, r, i + 1200) - .5) * 4;
+          ctx.beginPath();
+          ctx.moveTo(x - size * .7, yy);
+          ctx.bezierCurveTo(x - size * .3, yy - 2, x + size * .15, yy + 2, x + size * .7, yy - 1);
+          ctx.stroke();
+        }
       }
       ctx.restore();
     }
@@ -664,23 +736,24 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.save();
       const hasVisibleLabel = Boolean(place.name) && place.showLabel !== false;
       const badgeY = place.iconPosition === "center" || (place.iconPosition !== "top" && !hasVisibleLabel) ? y : y - size * .2;
-      const radius = size * .34;
+      const iconScale = place.iconScale || state.placeIconScales[place.type] || 1;
+      const radius = size * .34 * Math.max(1, iconScale * .92);
       ctx.shadowColor = "rgba(58, 35, 18, .28)";
       ctx.shadowBlur = 4 * state.scale;
-      ctx.fillStyle = isOldSchool() ? "#ffffff" : "rgba(209, 173, 102, .7)";
+      ctx.fillStyle = place.iconBackgroundColor || (isOldSchool() ? "#ffffff" : "rgba(209, 173, 102, .7)");
       ctx.beginPath();
       ctx.arc(x, badgeY, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.lineWidth = Math.max(2, 3 * state.scale);
-      ctx.strokeStyle = isOldSchool() ? "#000000" : "rgba(88, 54, 27, .74)";
+      ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(88, 54, 27, .74)");
       ctx.stroke();
       ctx.lineWidth = Math.max(1, 1.3 * state.scale);
-      ctx.strokeStyle = isOldSchool() ? "#000000" : "rgba(255, 234, 176, .72)";
+      ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(255, 234, 176, .72)");
       ctx.beginPath();
       ctx.arc(x, badgeY, radius - 4 * state.scale, 0, Math.PI * 2);
       ctx.stroke();
-      drawSvgIcon(type.icon, x, badgeY, size * .48 * (place.iconScale || state.placeIconScales[place.type] || 1), .96);
+      drawSvgIcon(type.icon, x, badgeY, size * .48 * iconScale, .96);
       ctx.restore();
     }
 
@@ -703,8 +776,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         if (!cell.place || !cell.place.name) return;
         const p = hexToPixel(q, r);
         const text = cell.place.name;
-        const textScale = Math.max(.6, Math.min(1.6, Number(cell.place.textScale) || 1));
-        const fontSize = Math.max(12, Math.min(48, 24 * state.scale * textScale));
+        const textScale = Math.max(.6, Math.min(3, Number(cell.place.textScale) || 1));
+        const fontSize = Math.max(12, Math.min(96, 24 * state.scale * textScale));
         if (cell.place.showLabel === false) return;
         const isAbove = cell.place.labelPosition === "top";
         const y = isAbove ? p.y - state.hexSize * state.scale * .58 : p.y + state.hexSize * state.scale * .18;
@@ -927,11 +1000,13 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const snapped = snapPathPoint(pos, useEdges);
       const point = pixelToWorld(snapped.x, snapped.y);
       if (selected && selected.type === state.tool) {
+        recordHistory();
         state.currentPath = state.paths.splice(state.selectedPathIndex, 1)[0];
         state.selectedPathIndex = null;
         const last = state.currentPath.points[state.currentPath.points.length - 1];
         if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
       } else {
+        recordHistory();
         state.currentPath = { type: state.tool, snapToEdges: state.snapToEdges, snapToCenters: !state.snapToEdges, points: [point] };
       }
       updatePathSelectionUi();
@@ -946,6 +1021,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const last = points[points.length - 1];
       const minDistance = .16;
       if (Math.hypot(point[0] - last[0], point[1] - last[1]) < minDistance) return;
+      recordHistory();
       points.push(point);
       scheduleSave();
       draw();
@@ -963,29 +1039,23 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       draw();
     }
 
-    function distanceToSegment(point, a, b) {
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const length = dx * dx + dy * dy || 1;
-      const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length));
-      return Math.hypot(point.x - (a.x + dx * t), point.y - (a.y + dy * t));
+    function findPathAt(pos, type) {
+      return MapPathGeometry.findPathAt(state.paths || [], pos, type, worldToPixel, Math.max(10, state.hexSize * state.scale * .34));
     }
 
-    function findPathAt(pos, type) {
-      const threshold = Math.max(10, state.hexSize * state.scale * .34);
-      let match = -1;
-      let distance = Infinity;
-      (state.paths || []).forEach((path, index) => {
-        if (path.type !== type) return;
-        for (let i = 1; i < path.points.length; i++) {
-          const current = distanceToSegment(pos, worldToPixel(path.points[i - 1]), worldToPixel(path.points[i]));
-          if (current < threshold && current < distance) {
-            match = index;
-            distance = current;
-          }
-        }
-      });
-      return match;
+    function findPathEndpointAt(pos, type) {
+      return MapPathGeometry.findPathEndpointAt(state.paths || [], pos, type, worldToPixel, Math.max(13, state.hexSize * state.scale * .42));
+    }
+
+    function startPathFromEndpoint(index, endpointIndex) {
+      recordHistory();
+      const path = state.paths.splice(index, 1)[0];
+      if (endpointIndex === 0) path.points.reverse();
+      state.currentPath = path;
+      state.selectedPathIndex = null;
+      state.pathDrag = null;
+      updatePathSelectionUi();
+      draw();
     }
 
     function selectPath(index) {
@@ -998,12 +1068,15 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const path = state.paths[state.selectedPathIndex];
       els.deleteSelectedPathBtn.disabled = !path;
       els.pathSelectionHint.textContent = path
-        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Clique em uma area vazia para continuar pelo final do desenho."
+        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Clique em uma bolinha para continuar por uma ponta ou arraste o desenho para mover."
+        : state.currentPath
+          ? (state.currentPath.type === "river" ? "Continuando o rio." : "Continuando a rua.") + " Arraste para adicionar novos pontos."
         : "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar ou continuar o traço.";
     }
 
     function deleteSelectedPath() {
       if (state.selectedPathIndex === null) return;
+      recordHistory();
       state.paths.splice(state.selectedPathIndex, 1);
       state.selectedPathIndex = null;
       updatePathSelectionUi();
@@ -1015,20 +1088,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const point = pixelToWorld(pos.x, pos.y);
       const radius = .45;
       const before = (state.paths || []).length;
+      const willErase = (state.paths || []).some(path => path.points.some(p => Math.hypot(p[0] - point[0], p[1] - point[1]) < radius));
+      if (willErase) recordHistory();
       state.paths = (state.paths || []).filter(path => !path.points.some(p => Math.hypot(p[0] - point[0], p[1] - point[1]) < radius));
-      if (state.paths.length !== before) scheduleSave();
-    }
-
-    function areNeighbors(q1, r1, q2, r2) {
-      const dirsEven = [[1,0],[-1,0],[0,-1],[-1,-1],[0,1],[-1,1]];
-      const dirsOdd = [[1,0],[-1,0],[1,-1],[0,-1],[1,1],[0,1]];
-      const dirs = (r1 & 1) ? dirsOdd : dirsEven;
-      return dirs.some(([dq, dr]) => q1 + dq === q2 && r1 + dr === r2);
-    }
-
-    function pointerPos(event) {
-      const rect = canvas.getBoundingClientRect();
-      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      if (state.paths.length !== before) {
+        scheduleSave();
+      }
     }
 
     function syncDetails() {
@@ -1071,6 +1136,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.editLabelEditor.appendChild(PlaceLabelEditor.create(cell.place, {
         icons: Object.entries(placeTypes).map(([id, item]) => ({ id, label: item.label })),
         onChange: changes => {
+        recordHistory();
         cell.place = { ...cell.place, ...changes };
         els.selectedName.value = changes.name;
         els.selectedTextScale.value = Math.round(changes.textScale * 100);
@@ -1085,6 +1151,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function applyDetails() {
       if (!state.selected) return;
+      recordHistory();
       const { q, r } = state.selected;
       const cell = cellAt(q, r);
       const name = els.selectedName.value.trim();
@@ -1259,11 +1326,47 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       };
     }
 
+    function updateHistoryUi() {
+      return ({ canUndo, canRedo }) => {
+        els.undoBtn.disabled = !canUndo;
+        els.redoBtn.disabled = !canRedo;
+      };
+    }
+
+    function historySnapshot() {
+      return JSON.stringify({
+        project: exportState(),
+        currentPath: state.currentPath,
+        selected: state.selected,
+        selectedPathIndex: state.selectedPathIndex
+      });
+    }
+
+    history = MapHistory.create({
+      capture: historySnapshot,
+      limit: 200,
+      onChange: updateHistoryUi(),
+      restore: snapshot => {
+        const saved = JSON.parse(snapshot);
+        importState(saved.project || saved);
+        state.currentPath = saved.currentPath || null;
+        state.selected = saved.selected || null;
+        state.selectedPathIndex = saved.selectedPathIndex ?? null;
+        syncDetails();
+      }
+    });
+
+    function recordHistory() { history.record(); }
+    function clearHistory() { history.clear(); }
+    function undo() { history.undo(); }
+    function redo() { history.redo(); }
+
     function importState(data) {
       if (data && data.settings && data.hexes) {
         importHexerMap(data);
         return;
       }
+      if (!history.isRestoring()) clearHistory();
       state.mapId = data.mapId || state.mapId || createMapId();
       state.mapName = data.mapName || "Mapa Hex Local";
       state.mapStyle = data.mapStyle === "oldschool" ? "oldschool" : "modern";
@@ -1309,6 +1412,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         snow: "snow"
       };
       const placeMap = { city: "settlement", town: "settlement", village: "settlement", temple: "temple", castle: "castle", tower: "tower", ruins: "ruins", mine: "mine" };
+      if (!history.isRestoring()) clearHistory();
       state.cols = Number(data.settings.width) || 24;
       state.rows = Number(data.settings.height) || 24;
       state.mapId = createMapId();
@@ -1521,6 +1625,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function createNewMap() {
+      clearHistory();
       state.cols = Math.max(6, Math.min(300, Number(els.newMapCols.value) || 28));
       state.rows = Math.max(6, Math.min(200, Number(els.newMapRows.value) || 20));
       state.mapName = els.newMapName.value.trim() || "Mapa sem nome";
@@ -1587,6 +1692,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         scheduleSave();
       });
       els.deleteSelectedPathBtn.addEventListener("click", deleteSelectedPath);
+      els.undoBtn.addEventListener("click", undo);
+      els.redoBtn.addEventListener("click", redo);
 
       document.querySelectorAll("[data-tool]").forEach(btn => {
         btn.addEventListener("click", () => setTool(btn.dataset.tool));
@@ -1641,106 +1748,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.zoomIn.addEventListener("click", () => setZoom(state.scale + .15));
       els.zoomOut.addEventListener("click", () => setZoom(state.scale - .15));
       els.centerBtn.addEventListener("click", centerMap);
+          document.addEventListener("keydown", event => {
+            if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
+            event.preventDefault();
+            if (event.shiftKey) redo();
+            else undo();
+          });
     }
 
-    canvas.addEventListener("pointerdown", event => {
-      canvas.setPointerCapture(event.pointerId);
-      const pos = pointerPos(event);
-      if (event.button === 2 || event.shiftKey || event.ctrlKey || event.code === "Space") {
-        state.isPanning = true;
-        state.panStart = { x: event.clientX, y: event.clientY, ox: state.offsetX, oy: state.offsetY };
-        return;
-      }
-      state.isPainting = true;
-      state.activePathKey = null;
-      if (state.tool === "road" || state.tool === "river") {
-        const existing = findPathAt(pos, state.tool);
-        if (existing !== -1) {
-          state.isPainting = false;
-          selectPath(existing);
-          return;
-        }
-        startFreePath(pos);
-      } else {
-        const cell = pixelToHex(pos.x, pos.y);
-        if (state.tool === "paint") state.hoveredBrush = cell;
-        if (cell) state.activePathKey = key(cell.q, cell.r);
-        if (state.tool === "erase") {
-          const existing = findPathAt(pos, "road");
-          const river = existing === -1 ? findPathAt(pos, "river") : -1;
-          if (existing !== -1 || river !== -1) {
-            state.isPainting = false;
-            selectPath(existing !== -1 ? existing : river);
-            return;
-          }
-          eraseFreePathsNear(pos);
-        }
-        handleCell(cell);
-      }
+    MapCanvasController.bind({
+      canvas, state, key, pixelToHex, pixelToWorld, worldToPixel,
+      findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath,
+      recordHistory, scheduleSave, draw, handleCell, eraseFreePathsNear, selectPath,
+      setTool, syncDetails, setZoom, focusSelectedName: () => els.selectedName.focus(), resizeCanvas
     });
-
-    canvas.addEventListener("pointermove", event => {
-      if (state.isPanning && state.panStart) {
-        state.offsetX = state.panStart.ox + event.clientX - state.panStart.x;
-        state.offsetY = state.panStart.oy + event.clientY - state.panStart.y;
-        draw();
-        return;
-      }
-      const pos = pointerPos(event);
-      const cell = pixelToHex(pos.x, pos.y);
-      if (state.tool === "paint") {
-        const changed = !cell || !state.hoveredBrush || cell.q !== state.hoveredBrush.q || cell.r !== state.hoveredBrush.r;
-        state.hoveredBrush = cell;
-        if (changed) draw();
-      }
-      if (!state.isPainting) return;
-      if (state.tool === "road" || state.tool === "river") {
-        addFreePathPoint(pos);
-        return;
-      }
-      if (!cell) return;
-      const hoveredKey = key(cell.q, cell.r);
-      if ((state.tool === "paint" || state.tool === "erase") && hoveredKey !== state.activePathKey) {
-        state.activePathKey = hoveredKey;
-        if (state.tool === "erase") eraseFreePathsNear(pos);
-        handleCell(cell);
-      }
-    });
-
-    canvas.addEventListener("pointerup", () => {
-      finishFreePath();
-      state.isPainting = false;
-      state.isPanning = false;
-      state.panStart = null;
-      state.activePathKey = null;
-    });
-
-    canvas.addEventListener("pointerleave", () => {
-      if (!state.hoveredBrush) return;
-      state.hoveredBrush = null;
-      draw();
-    });
-
-    canvas.addEventListener("dblclick", event => {
-      const pos = pointerPos(event);
-      const cell = pixelToHex(pos.x, pos.y);
-      if (cell) {
-        state.selected = cell;
-        setTool("select");
-        syncDetails();
-        draw();
-        els.selectedName.focus();
-      }
-    });
-
-    canvas.addEventListener("wheel", event => {
-      event.preventDefault();
-      const pos = pointerPos(event);
-      setZoom(state.scale + (event.deltaY > 0 ? -.08 : .08), pos);
-    }, { passive: false });
-
-    canvas.addEventListener("contextmenu", event => event.preventDefault());
-    window.addEventListener("resize", resizeCanvas);
 
     initControls();
     loadLocal();

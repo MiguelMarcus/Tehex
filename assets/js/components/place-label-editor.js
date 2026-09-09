@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const styleKeys = ["textScale", "labelPosition", "showLabel", "labelFont", "textColor", "labelBorder", "borderColor", "type", "iconScale", "iconPosition"];
+  const styleKeys = ["textScale", "labelPosition", "showLabel", "labelFont", "textColor", "labelBorder", "borderColor", "type", "iconScale", "iconPosition", "iconBackgroundColor", "iconBorderColor"];
   const fonts = [["Georgia, serif", "Georgia"], ["Palatino Linotype, Palatino, serif", "Palatino"], ["Times New Roman, serif", "Times New Roman"]];
 
   function field(label, control) {
@@ -35,11 +35,11 @@
     const scale = document.createElement("input");
     scale.type = "range";
     scale.min = "60";
-    scale.max = "160";
+    scale.max = "300";
     const scaleNumber = document.createElement("input");
     scaleNumber.type = "number";
     scaleNumber.min = "60";
-    scaleNumber.max = "160";
+    scaleNumber.max = "300";
     scaleNumber.step = "1";
     const scaleWrap = document.createElement("div");
     scaleWrap.className = "place-label-editor__range";
@@ -66,6 +66,10 @@
     textColor.type = "color";
     const borderColor = document.createElement("input");
     borderColor.type = "color";
+    const iconBackgroundColor = document.createElement("input");
+    iconBackgroundColor.type = "color";
+    const iconBorderColor = document.createElement("input");
+    iconBorderColor.type = "color";
     const borderEnabled = document.createElement("input");
     borderEnabled.type = "checkbox";
     const visible = document.createElement("input");
@@ -88,12 +92,14 @@
       iconPosition.value = data.iconPosition || "auto";
       textColor.value = data.textColor || "#3b2318";
       borderColor.value = data.borderColor || "#fff9f0";
+      iconBackgroundColor.value = data.iconBackgroundColor || "#d1ad66";
+      iconBorderColor.value = data.iconBorderColor || "#58361b";
       borderEnabled.checked = data.labelBorder !== false;
       visible.checked = data.showLabel !== false;
     }
 
     function value() {
-      return { name: name.value, textScale: Number(scale.value) / 100, labelPosition: position.value, showLabel: visible.checked, labelFont: font.value, textColor: textColor.value, labelBorder: borderEnabled.checked, borderColor: borderColor.value, type: icon.value, iconScale: Number(iconScale.value) / 100, iconPosition: iconPosition.value };
+      return { name: name.value, textScale: Number(scale.value) / 100, labelPosition: position.value, showLabel: visible.checked, labelFont: font.value, textColor: textColor.value, labelBorder: borderEnabled.checked, borderColor: borderColor.value, type: icon.value, iconScale: Number(iconScale.value) / 100, iconPosition: iconPosition.value, iconBackgroundColor: iconBackgroundColor.value, iconBorderColor: iconBorderColor.value };
     }
 
     function syncSize(source, target, max) {
@@ -106,9 +112,9 @@
     }
 
     setValues(place);
-    [name, position, font, icon, iconPosition, textColor, borderColor, borderEnabled, visible].forEach(control => control.addEventListener(control.type === "checkbox" || control.tagName === "SELECT" ? "change" : "input", () => onChange(value())));
-    syncSize(scale, scaleNumber, 160);
-    syncSize(scaleNumber, scale, 160);
+    [name, position, font, icon, iconPosition, textColor, borderColor, iconBackgroundColor, iconBorderColor, borderEnabled, visible].forEach(control => control.addEventListener(control.type === "checkbox" || control.tagName === "SELECT" ? "change" : "input", () => onChange(value())));
+    syncSize(scale, scaleNumber, 300);
+    syncSize(scaleNumber, scale, 300);
     syncSize(iconScale, iconNumber, 180);
     syncSize(iconNumber, iconScale, 180);
 
@@ -149,7 +155,7 @@
 
     const colors = document.createElement("div");
     colors.className = "place-label-editor__colors";
-    colors.append(field("Cor do texto", textColor), field("Cor da borda", borderColor));
+    colors.append(field("Cor do texto", textColor), field("Cor da borda do texto", borderColor), field("Fundo do ícone", iconBackgroundColor), field("Borda do ícone", iconBorderColor));
     const styles = document.createElement("div");
     styles.className = "place-label-editor__styles";
     styles.append(field("Salvar estilo", styleName), savedStyles, styleActions);
