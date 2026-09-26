@@ -110,6 +110,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       terrainIconScales: {},
       placeIconScales: {},
       snapToEdges: false,
+      roadSnapToEdges: false,
+      riverSnapToEdges: false,
       cells: {},
       paths: [],
       currentPath: null,
@@ -139,6 +141,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       terrainSection: document.getElementById("terrainSection"),
       placeSection: document.getElementById("placeSection"),
       pathAssistSection: document.getElementById("pathAssistSection"),
+      roadOptionsSection: document.getElementById("roadOptionsSection"),
+      riverOptionsSection: document.getElementById("riverOptionsSection"),
       editLabelSection: document.getElementById("editLabelSection"),
       editLabelEditor: document.getElementById("editLabelEditor"),
       placeName: document.getElementById("placeName"),
@@ -149,7 +153,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       placeIconScale: document.getElementById("placeIconScale"),
       placeIconScaleValue: document.getElementById("placeIconScaleValue"),
       placeIconScaleLabel: document.getElementById("placeIconScaleLabel"),
-      snapToEdges: document.getElementById("snapToEdges"),
+      roadSnapToEdges: document.getElementById("roadSnapToEdges"),
+      riverSnapToEdges: document.getElementById("riverSnapToEdges"),
       optionsBtn: document.getElementById("optionsBtn"),
       optionsMenu: document.getElementById("optionsMenu"),
       menuNewMapBtn: document.getElementById("menuNewMapBtn"),
@@ -820,6 +825,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.terrainSection.hidden = tool !== "paint";
       els.placeSection.hidden = tool !== "place";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
+      els.roadOptionsSection.hidden = tool !== "road";
+      els.riverOptionsSection.hidden = tool !== "river";
+      if (tool === "road") state.snapToEdges = state.roadSnapToEdges;
+      if (tool === "river") state.snapToEdges = state.riverSnapToEdges;
       els.editLabelSection.hidden = tool !== "select";
       els.toolHint.textContent = tool === "navigate"
         ? "Arraste para navegar pelo mapa. Esta ferramenta não seleciona nem altera elementos."
@@ -1317,6 +1326,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         mapName: state.mapName,
         mapStyle: state.mapStyle,
         snapToEdges: state.snapToEdges,
+        roadSnapToEdges: state.roadSnapToEdges,
+        riverSnapToEdges: state.riverSnapToEdges,
         brushSize: state.brushSize,
         borderColor: state.borderColor,
         terrainIconScale: state.terrainIconScale,
@@ -1375,6 +1386,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.mapName = data.mapName || "Mapa Hex Local";
       state.mapStyle = data.mapStyle === "oldschool" ? "oldschool" : "modern";
       state.snapToEdges = Boolean(data.snapToEdges);
+      state.roadSnapToEdges = Boolean(data.roadSnapToEdges ?? data.snapToEdges);
+      state.riverSnapToEdges = Boolean(data.riverSnapToEdges ?? data.snapToEdges);
+      if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
+      if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
       state.brushSize = Math.max(1, Math.min(4, Number(data.brushSize) || 1));
       state.borderColor = borderColors.includes(data.borderColor) ? data.borderColor : "#77664b";
       state.terrainIconScale = Math.max(.6, Math.min(1.6, Number(data.terrainIconScale) || 1));
@@ -1388,12 +1403,13 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.selected = null;
       state.lastPathCell = null;
       els.mapTitle.textContent = state.mapName;
-      els.snapToEdges.checked = state.snapToEdges;
+      els.roadSnapToEdges.checked = state.roadSnapToEdges;
+      els.riverSnapToEdges.checked = state.riverSnapToEdges;
       els.brushSize.value = state.brushSize;
       els.brushSizeValue.textContent = state.brushSize + (state.brushSize === 1 ? " hex" : " hexes");
       updateTerrainScaleControl();
       updatePlacePreview();
-      centerMap();
+      if (!history.isRestoring()) centerMap();
       syncDetails();
       updatePlaces();
       saveLocal();
@@ -1423,6 +1439,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.mapName = data.name || "Mapa Hex Local";
       state.mapStyle = "modern";
       state.snapToEdges = false;
+      state.roadSnapToEdges = false;
+      state.riverSnapToEdges = false;
       state.brushSize = 1;
       state.borderColor = "#77664b";
       state.terrainIconScale = 1;
@@ -1452,7 +1470,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.lastPathCell = null;
       state.scale = 1;
       els.mapTitle.textContent = state.mapName;
-      els.snapToEdges.checked = state.snapToEdges;
+      els.roadSnapToEdges.checked = state.roadSnapToEdges;
+      els.riverSnapToEdges.checked = state.riverSnapToEdges;
       updateTerrainScaleControl();
       updatePlacePreview();
       fitMap();
@@ -1637,6 +1656,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const chosen = els.styleOptions.querySelector("[data-style].active");
       state.mapStyle = chosen ? chosen.dataset.style : "modern";
       state.snapToEdges = false;
+      state.roadSnapToEdges = false;
+      state.riverSnapToEdges = false;
       state.brushSize = 1;
       state.borderColor = "#77664b";
       state.terrainIconScale = 1;
@@ -1650,7 +1671,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       }
       state.selected = null;
       els.mapTitle.textContent = state.mapName;
-      els.snapToEdges.checked = state.snapToEdges;
+      els.roadSnapToEdges.checked = state.roadSnapToEdges;
+      els.riverSnapToEdges.checked = state.riverSnapToEdges;
       updateTerrainScaleControl();
       updatePlacePreview();
       closeNewMapDialog();
@@ -1691,8 +1713,14 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         scheduleSave();
         draw();
       });
-      els.snapToEdges.addEventListener("change", () => {
-        state.snapToEdges = els.snapToEdges.checked;
+      els.roadSnapToEdges.addEventListener("change", () => {
+        state.roadSnapToEdges = els.roadSnapToEdges.checked;
+        if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
+        scheduleSave();
+      });
+      els.riverSnapToEdges.addEventListener("change", () => {
+        state.riverSnapToEdges = els.riverSnapToEdges.checked;
+        if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
         scheduleSave();
       });
       els.deleteSelectedPathBtn.addEventListener("click", deleteSelectedPath);
