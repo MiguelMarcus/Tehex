@@ -11,6 +11,9 @@ Abra `https://miguelmarcus.github.io/Tehex/` em um navegador. O editor salva os 
 - `index.html`: estrutura semantica da aplicacao.
 - `assets/css/app.css`: estilos e layout.
 - `assets/js/app.js`: interface, desenho do mapa e ferramentas.
+- `assets/js/state/map-state.js`: estado inicial compartilhado do mapa.
+- `assets/js/services/map-geometry.js`: coordenadas, hit-test e encaixe de traçados nos hexes.
+- `assets/js/components/path-tool-controller.js`: criação, seleção e remoção de ruas e rios.
 - `assets/js/data/local-map-store.js`: camada de dados local, responsavel pelos mapas salvos.
 - `assets/hex-icons/`: icones SVG de terrenos e lugares.
 - `.github/workflows/deploy-pages.yml`: publicacao automatica no GitHub Pages.

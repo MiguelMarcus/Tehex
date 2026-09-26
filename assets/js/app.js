@@ -90,41 +90,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       iconImages[item.icon] = loadCanvasSafeIcon(item.icon);
     });
 
-    const state = {
-      cols: 28,
-      rows: 20,
-      hexSize: 31,
-      scale: 1,
-      isExporting: false,
-      offsetX: 80,
-      offsetY: 70,
-      mapName: "Mapa Hex Local",
-      mapStyle: "modern",
-      mapId: null,
-      tool: "paint",
-      terrain: "grass",
-      paintShowIcon: true,
-      brushSize: 1,
-      borderColor: "#77664b",
-      terrainIconScale: 1,
-      terrainIconScales: {},
-      placeIconScales: {},
-      snapToEdges: false,
-      roadSnapToEdges: false,
-      riverSnapToEdges: false,
-      cells: {},
-      paths: [],
-      currentPath: null,
-      selectedPathIndex: null,
-      selected: null,
-      lastPathCell: null,
-      pathDrag: null,
-      activePathKey: null,
-      hoveredBrush: null,
-      isPainting: false,
-      isPanning: false,
-      panStart: null
-    };
+    const state = MapState.create();
 
     let history;
 
@@ -205,8 +171,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     els.newMapCols.max = 300;
     els.newMapRows.max = 200;
 
-    function key(q, r) { return q + "," + r; }
-    function parseKey(k) { return k.split(",").map(Number); }
+    const { hash, hexCorners, hexPath, hexToPixel, key, neighborEdges, parseKey, pixelToHex, pixelToWorld, snapPathPoint, worldToPixel } = MapGeometry.create(state);
     function terrainById(id) {
       const legacyId = { hill: "hills", desert: "sand" }[id] || id;
       return terrains.find(t => t.id === legacyId) || terrains[0];
@@ -287,108 +252,6 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       });
     }
 
-    function hexToPixel(q, r) {
-      const s = state.hexSize;
-      const x = s * Math.sqrt(3) * (q + .5 * (r & 1));
-      const y = s * 1.5 * r;
-      return { x: x * state.scale + state.offsetX, y: y * state.scale + state.offsetY };
-    }
-
-    function worldToPixel(point) {
-      return {
-        x: point[0] * state.hexSize * Math.sqrt(3) * state.scale + state.offsetX,
-        y: point[1] * state.hexSize * 1.5 * state.scale + state.offsetY
-      };
-    }
-
-    function pixelToWorld(px, py) {
-      return [
-        (px - state.offsetX) / (state.hexSize * Math.sqrt(3) * state.scale),
-        (py - state.offsetY) / (state.hexSize * 1.5 * state.scale)
-      ];
-    }
-
-    function pixelToHex(px, py) {
-      const s = state.hexSize;
-      const x = (px - state.offsetX) / state.scale;
-      const y = (py - state.offsetY) / state.scale;
-      let best = null;
-      let bestDist = Infinity;
-      const approxR = Math.round(y / (s * 1.5));
-      const approxQ = Math.round(x / (s * Math.sqrt(3)) - .5 * (approxR & 1));
-      for (let r = approxR - 2; r <= approxR + 2; r++) {
-        for (let q = approxQ - 2; q <= approxQ + 2; q++) {
-          if (q < 0 || r < 0 || q >= state.cols || r >= state.rows) continue;
-          const p = hexToPixel(q, r);
-          const d = Math.hypot(px - p.x, py - p.y);
-          if (d < bestDist) {
-            bestDist = d;
-            best = { q, r };
-          }
-        }
-      }
-      return bestDist <= state.hexSize * state.scale ? best : null;
-    }
-
-    function snapToNearestHexEdge(pos) {
-      if (!state.snapToEdges) return pos;
-      const cell = pixelToHex(pos.x, pos.y);
-      if (!cell) return pos;
-      let closest = null;
-      for (let r = cell.r - 1; r <= cell.r + 1; r++) {
-        for (let q = cell.q - 1; q <= cell.q + 1; q++) {
-          if (q < 0 || r < 0 || q >= state.cols || r >= state.rows) continue;
-          const center = hexToPixel(q, r);
-          const corners = hexCorners(center.x, center.y, state.hexSize * state.scale - .8);
-          for (let i = 0; i < 6; i++) {
-            const a = corners[i];
-            const b = corners[(i + 1) % 6];
-            const dx = b[0] - a[0];
-            const dy = b[1] - a[1];
-            const lengthSq = dx * dx + dy * dy || 1;
-            const t = Math.max(0, Math.min(1, ((pos.x - a[0]) * dx + (pos.y - a[1]) * dy) / lengthSq));
-            const x = a[0] + dx * t;
-            const y = a[1] + dy * t;
-            const distance = Math.hypot(pos.x - x, pos.y - y);
-            if (!closest || distance < closest.distance) closest = { x, y, distance };
-          }
-        }
-      }
-      return closest && closest.distance <= Math.max(12, state.hexSize * state.scale * .34) ? closest : pos;
-    }
-
-    function snapToHexCenter(pos) {
-      const cell = pixelToHex(pos.x, pos.y);
-      return cell ? hexToPixel(cell.q, cell.r) : pos;
-    }
-
-    function snapPathPoint(pos, useEdges) {
-      if (!useEdges) return snapToHexCenter(pos);
-      const previous = state.snapToEdges;
-      state.snapToEdges = true;
-      const point = snapToNearestHexEdge(pos);
-      state.snapToEdges = previous;
-      return point;
-    }
-
-    function hexPath(x, y, size) {
-      const p = new Path2D();
-      for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 180 * (60 * i - 30);
-        const px = x + size * Math.cos(angle);
-        const py = y + size * Math.sin(angle);
-        if (i === 0) p.moveTo(px, py);
-        else p.lineTo(px, py);
-      }
-      p.closePath();
-      return p;
-    }
-
-    function hash(q, r, salt = 0) {
-      let n = Math.sin(q * 127.1 + r * 311.7 + salt * 74.7) * 43758.5453;
-      return n - Math.floor(n);
-    }
-
     function shade(hex, amount) {
       const n = parseInt(hex.slice(1), 16);
       let r = (n >> 16) + amount;
@@ -398,35 +261,6 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       g = Math.max(0, Math.min(255, g));
       b = Math.max(0, Math.min(255, b));
       return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-    }
-
-    function neighborEdges(q, r) {
-      const even = [
-        { edge: 0, q: q + 1, r },
-        { edge: 1, q, r: r + 1 },
-        { edge: 2, q: q - 1, r: r + 1 },
-        { edge: 3, q: q - 1, r },
-        { edge: 4, q: q - 1, r: r - 1 },
-        { edge: 5, q, r: r - 1 }
-      ];
-      const odd = [
-        { edge: 0, q: q + 1, r },
-        { edge: 1, q: q + 1, r: r + 1 },
-        { edge: 2, q, r: r + 1 },
-        { edge: 3, q: q - 1, r },
-        { edge: 4, q, r: r - 1 },
-        { edge: 5, q: q + 1, r: r - 1 }
-      ];
-      return (r & 1) ? odd : even;
-    }
-
-    function hexCorners(x, y, size) {
-      const points = [];
-      for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 180 * (60 * i - 30);
-        points.push([x + size * Math.cos(angle), y + size * Math.sin(angle)]);
-      }
-      return points;
     }
 
     function resizeCanvas() {
@@ -1007,107 +841,15 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       return cells;
     }
 
-    function startFreePath(pos) {
-      const selected = state.paths[state.selectedPathIndex];
-      const useEdges = selected && selected.type === state.tool ? Boolean(selected.snapToEdges) : state.snapToEdges;
-      const snapped = snapPathPoint(pos, useEdges);
-      const point = pixelToWorld(snapped.x, snapped.y);
-      if (selected && selected.type === state.tool) {
-        recordHistory();
-        state.currentPath = state.paths.splice(state.selectedPathIndex, 1)[0];
-        state.selectedPathIndex = null;
-        const last = state.currentPath.points[state.currentPath.points.length - 1];
-        if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
-      } else {
-        recordHistory();
-        state.currentPath = { type: state.tool, snapToEdges: state.snapToEdges, snapToCenters: !state.snapToEdges, points: [point] };
-      }
-      updatePathSelectionUi();
-      draw();
-    }
-
-    function addFreePathPoint(pos) {
-      if (!state.currentPath) return;
-      const snapped = snapPathPoint(pos, state.currentPath.snapToEdges);
-      const point = pixelToWorld(snapped.x, snapped.y);
-      const points = state.currentPath.points;
-      const last = points[points.length - 1];
-      const minDistance = .16;
-      if (Math.hypot(point[0] - last[0], point[1] - last[1]) < minDistance) return;
-      recordHistory();
-      points.push(point);
-      scheduleSave();
-      draw();
-    }
-
-    function finishFreePath() {
-      if (!state.currentPath) return;
-      if (state.currentPath.points.length > 1) {
-        state.paths = state.paths || [];
-        state.paths.push(state.currentPath);
-        scheduleSave();
-      }
-      state.currentPath = null;
-      updatePathSelectionUi();
-      draw();
-    }
-
-    function findPathAt(pos, type) {
-      return MapPathGeometry.findPathAt(state.paths || [], pos, type, worldToPixel, Math.max(10, state.hexSize * state.scale * .34));
-    }
-
-    function findPathEndpointAt(pos, type) {
-      return MapPathGeometry.findPathEndpointAt(state.paths || [], pos, type, worldToPixel, Math.max(13, state.hexSize * state.scale * .42));
-    }
-
-    function startPathFromEndpoint(index, endpointIndex) {
-      recordHistory();
-      const path = state.paths.splice(index, 1)[0];
-      if (endpointIndex === 0) path.points.reverse();
-      state.currentPath = path;
-      state.selectedPathIndex = null;
-      state.pathDrag = null;
-      updatePathSelectionUi();
-      draw();
-    }
-
-    function selectPath(index) {
-      state.selectedPathIndex = index;
-      updatePathSelectionUi();
-      draw();
-    }
-
-    function updatePathSelectionUi() {
-      const path = state.paths[state.selectedPathIndex];
-      els.deleteSelectedPathBtn.disabled = !path;
-      els.pathSelectionHint.textContent = path
-        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Clique em uma bolinha para continuar por uma ponta ou arraste o desenho para mover."
-        : state.currentPath
-          ? (state.currentPath.type === "river" ? "Continuando o rio." : "Continuando a rua.") + " Arraste para adicionar novos pontos."
-        : "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar ou continuar o traço.";
-    }
-
-    function deleteSelectedPath() {
-      if (state.selectedPathIndex === null) return;
-      recordHistory();
-      state.paths.splice(state.selectedPathIndex, 1);
-      state.selectedPathIndex = null;
-      updatePathSelectionUi();
-      scheduleSave();
-      draw();
-    }
-
-    function eraseFreePathsNear(pos) {
-      const point = pixelToWorld(pos.x, pos.y);
-      const radius = .45;
-      const before = (state.paths || []).length;
-      const willErase = (state.paths || []).some(path => path.points.some(p => Math.hypot(p[0] - point[0], p[1] - point[1]) < radius));
-      if (willErase) recordHistory();
-      state.paths = (state.paths || []).filter(path => !path.points.some(p => Math.hypot(p[0] - point[0], p[1] - point[1]) < radius));
-      if (state.paths.length !== before) {
-        scheduleSave();
-      }
-    }
+    const pathTools = PathToolController.create({
+      state, els, pixelToWorld, snapPathPoint, worldToPixel,
+      recordHistory, scheduleSave, draw
+    });
+    const {
+      addFreePathPoint, deleteSelectedPath, eraseNear: eraseFreePathsNear,
+      findPathAt, findPathEndpointAt, finishFreePath, selectPath,
+      startFreePath, startPathFromEndpoint, updateSelectionUi: updatePathSelectionUi
+    } = pathTools;
 
     function syncDetails() {
       if (!state.selected) {
