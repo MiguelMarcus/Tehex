@@ -772,9 +772,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.fillStyle = isOldSchool() ? "rgba(0,0,0,.58)" : "rgba(62,48,32,.55)";
       MapRenderPerformance.forEachCell(range, (q, r) => {
         const point = hexToPixel(q, r);
-        ctx.fillText(q + "," + r, point.x, point.y + state.hexSize * state.scale * .62);
+        ctx.fillText(columnLabel(q) + (r + 1), point.x, point.y + state.hexSize * state.scale * .62);
       });
       ctx.restore();
+    }
+
+    function columnLabel(index) {
+      let value = index + 1;
+      let label = "";
+      while (value > 0) {
+        value -= 1;
+        label = String.fromCharCode(65 + value % 26) + label;
+        value = Math.floor(value / 26);
+      }
+      return label;
     }
 
     function roundRect(x, y, w, h, r) {
@@ -1423,8 +1434,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       DownloadService.saveText(content, filename, type);
     }
 
-    function legendItems() {
-      const items = [];
+    function legendGroups() {
+      const groups = [];
       const usedTerrains = new Set();
       const usedPlaces = new Set();
       Object.values(state.cells).forEach(cell => {
@@ -1432,59 +1443,91 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         if (cell.place?.type) usedPlaces.add(cell.place.type);
       });
       if (state.layers.terrain) {
-        terrains.filter(terrain => usedTerrains.has(terrain.id)).forEach(terrain => items.push({ label: terrain.name, color: displayColor(terrain.color) }));
+        const terrainItems = terrains
+          .filter(terrain => usedTerrains.has(terrain.id))
+          .filter(terrain => terrain.id !== "grass" || usedTerrains.size === 1)
+          .map(terrain => ({ label: terrain.name, color: displayColor(terrain.color) }));
+        if (terrainItems.length) groups.push({ title: "Terrenos", items: terrainItems });
       }
       if (state.layers.places) {
-        Object.entries(placeTypes).filter(([id]) => usedPlaces.has(id)).forEach(([, place]) => items.push({ label: place.label, color: "#a9793f" }));
+        const placeItems = Object.entries(placeTypes)
+          .filter(([id]) => usedPlaces.has(id))
+          .map(([, place]) => ({ label: place.label, color: "#a9793f" }));
+        if (placeItems.length) groups.push({ title: "Lugares", items: placeItems });
       }
-      if (state.layers.roads && state.paths.some(path => path.type === "road")) items.push({ label: "Ruas e estradas", color: "#b78b4b" });
-      if (state.layers.rivers && state.paths.some(path => path.type === "river")) items.push({ label: "Rios", color: "#539dcd" });
-      if (state.layers.relief && Object.values(state.cells).some(cell => Number(cell.elevation) > 0)) items.push({ label: "Relevo elevado", color: "#705235" });
-      state.legendNotes.split("\n").map(line => line.trim()).filter(Boolean).forEach(line => items.push({ label: line, color: "#817568" }));
-      return items;
+      const featureItems = [];
+      if (state.layers.roads && state.paths.some(path => path.type === "road")) featureItems.push({ label: "Ruas e estradas", color: "#b78b4b" });
+      if (state.layers.rivers && state.paths.some(path => path.type === "river")) featureItems.push({ label: "Rios", color: "#539dcd" });
+      if (state.layers.relief && Object.values(state.cells).some(cell => Number(cell.elevation) > 0)) featureItems.push({ label: "Relevo elevado", color: "#705235" });
+      if (featureItems.length) groups.push({ title: "Elementos", items: featureItems });
+      const customItems = state.legendNotes.split("\n").map(line => line.trim()).filter(Boolean).map(label => ({ label, color: "#817568" }));
+      if (customItems.length) groups.push({ title: "Anotações", items: customItems });
+      return groups;
     }
 
     function renderLegendPreview() {
       els.legendPreview.replaceChildren();
-      const items = legendItems();
-      if (!items.length) {
+      const groups = legendGroups();
+      if (!groups.length) {
         els.legendPreview.textContent = "A legenda aparecerá quando o mapa possuir elementos.";
         return;
       }
-      items.forEach(item => {
-        const row = document.createElement("div");
-        row.className = "legend-preview-item";
-        const swatch = document.createElement("span");
-        swatch.className = "legend-preview-swatch";
-        swatch.style.background = item.color;
-        const label = document.createElement("span");
-        label.textContent = item.label;
-        row.append(swatch, label);
-        els.legendPreview.appendChild(row);
+      groups.forEach(group => {
+        const section = document.createElement("section");
+        section.className = "legend-preview-group";
+        const heading = document.createElement("strong");
+        heading.textContent = group.title;
+        const entries = document.createElement("div");
+        entries.className = "legend-preview-group-items";
+        group.items.forEach(item => {
+          const row = document.createElement("div");
+          row.className = "legend-preview-item";
+          const swatch = document.createElement("span");
+          swatch.className = "legend-preview-swatch";
+          swatch.style.background = item.color;
+          const label = document.createElement("span");
+          label.textContent = item.label;
+          row.append(swatch, label);
+          entries.appendChild(row);
+        });
+        section.append(heading, entries);
+        els.legendPreview.appendChild(section);
       });
     }
 
-    function drawExportLegend(imageCtx, width, startY, items, scale) {
-      if (!items.length) return;
-      const columns = Math.min(3, Math.max(1, items.length));
+    function getLegendHeight(groups, scale) {
+      return groups.reduce((height, group) => height + 21 * scale + Math.ceil(group.items.length / 3) * 25 * scale + 8 * scale, 26 * scale);
+    }
+
+    function drawExportLegend(imageCtx, width, startY, groups, scale) {
+      if (!groups.length) return;
+      const columns = 3;
       const columnWidth = (width - 48 * scale) / columns;
       const rowHeight = 25 * scale;
       imageCtx.save();
       imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
       imageCtx.font = `700 ${Math.round(15 * scale)}px Georgia, serif`;
       imageCtx.fillText("Legenda", 24 * scale, startY + 23 * scale);
-      imageCtx.font = `500 ${Math.round(11 * scale)}px Inter, sans-serif`;
-      items.forEach((item, index) => {
-        const column = index % columns;
-        const row = Math.floor(index / columns);
-        const x = 24 * scale + column * columnWidth;
-        const y = startY + 43 * scale + row * rowHeight;
-        imageCtx.fillStyle = item.color;
-        imageCtx.fillRect(x, y - 11 * scale, 14 * scale, 14 * scale);
-        imageCtx.strokeStyle = "rgba(0,0,0,.25)";
-        imageCtx.strokeRect(x, y - 11 * scale, 14 * scale, 14 * scale);
-        imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
-        imageCtx.fillText(item.label, x + 21 * scale, y);
+      let yOffset = startY + 44 * scale;
+      groups.forEach(group => {
+        imageCtx.fillStyle = isOldSchool() ? "#333333" : "#6b5233";
+        imageCtx.font = `700 ${Math.round(11 * scale)}px Inter, sans-serif`;
+        imageCtx.fillText(group.title, 24 * scale, yOffset);
+        yOffset += 16 * scale;
+        imageCtx.font = `500 ${Math.round(11 * scale)}px Inter, sans-serif`;
+        group.items.forEach((item, index) => {
+          const column = index % columns;
+          const row = Math.floor(index / columns);
+          const x = 24 * scale + column * columnWidth;
+          const y = yOffset + row * rowHeight;
+          imageCtx.fillStyle = item.color;
+          imageCtx.fillRect(x, y - 11 * scale, 14 * scale, 14 * scale);
+          imageCtx.strokeStyle = "rgba(0,0,0,.25)";
+          imageCtx.strokeRect(x, y - 11 * scale, 14 * scale, 14 * scale);
+          imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
+          imageCtx.fillText(item.label, x + 21 * scale, y);
+        });
+        yOffset += Math.ceil(group.items.length / columns) * rowHeight + 8 * scale;
       });
       imageCtx.restore();
     }
@@ -1516,8 +1559,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const size = state.hexSize * exportScale;
       const margin = Math.round(size * .9);
       const titleHeight = options.title ? 82 : 0;
-      const items = options.legend ? legendItems() : [];
-      const legendHeight = options.legend && items.length ? Math.ceil(items.length / 3) * 25 * exportScale + 58 * exportScale : 0;
+      const groups = options.legend ? legendGroups() : [];
+      const legendHeight = groups.length ? getLegendHeight(groups, exportScale) : 0;
       const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
       const mapHeight = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
       const height = Math.ceil(mapHeight + legendHeight);
@@ -1562,7 +1605,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           imageCtx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
           imageCtx.restore();
         }
-        if (items.length) drawExportLegend(imageCtx, width, mapHeight, items, exportScale);
+        if (groups.length) drawExportLegend(imageCtx, width, mapHeight, groups, exportScale);
         const blob = await PngExportService.toBlob(image, type);
         exportProgress.update(100, "Preparando download...");
         const link = DownloadService.createDownloadLink(blob, filename);
