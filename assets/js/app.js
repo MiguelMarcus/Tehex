@@ -303,6 +303,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state, cellAt, terrainById, neighborEdges, hexToPixel, hexCorners,
         displayColor, blendColors, hash, isOldSchool, range, quality
       });
+      drawElevationEdges(range);
       ctx.save();
       clipToMap(range);
       drawLegacyConnections("river", range);
@@ -476,17 +477,6 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const variation = Math.round((hash(q, r, 1) - .5) * (isOldSchool() ? 10 : 8));
       ctx.fillStyle = shade(baseColor, variation);
       ctx.fill(path);
-      const elevation = Math.max(0, Math.min(3, Number(cell.elevation) || 0));
-      if (elevation) {
-        ctx.save();
-        ctx.strokeStyle = isOldSchool() ? "#505050" : shade(baseColor, -28);
-        ctx.lineWidth = Math.max(1, elevation * 1.2 * state.scale);
-        for (let level = 1; level <= elevation; level++) {
-          ctx.globalAlpha = .24 + level * .1;
-          ctx.stroke(hexPath(p.x, p.y + level * 3 * state.scale, Math.max(2, size - level * 3 * state.scale)));
-        }
-        ctx.restore();
-      }
       if (quality === "detail") drawPaperTexture(q, r, p.x, p.y, size);
       const isLargeMap = !state.isExporting && state.cols * state.rows > 40 * 40;
       const iconDensity = isLargeMap ? .2 : quality === "standard" ? .5 : 1;
@@ -501,6 +491,45 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         ctx.lineWidth = Math.max(.6, .75 * state.scale);
         ctx.stroke(path);
       }
+    }
+
+    function drawElevationEdges(range) {
+      const size = state.hexSize * state.scale - .8;
+      MapRenderPerformance.forEachCell(range, (q, r) => {
+        const cell = cellAt(q, r);
+        const elevation = Math.max(0, Math.min(3, Number(cell.elevation) || 0));
+        if (!elevation) return;
+        const center = hexToPixel(q, r);
+        const corners = hexCorners(center.x, center.y, size);
+        neighborEdges(q, r).forEach(({ q: neighborQ, r: neighborR, edge }) => {
+          if (neighborQ < 0 || neighborR < 0 || neighborQ >= state.cols || neighborR >= state.rows) return;
+          const neighborElevation = Math.max(0, Math.min(3, Number(cellAt(neighborQ, neighborR).elevation) || 0));
+          const difference = elevation - neighborElevation;
+          if (difference <= 0) return;
+          const neighborCenter = hexToPixel(neighborQ, neighborR);
+          const offset = Math.min(size * .28, difference * 4 * state.scale);
+          const dx = (neighborCenter.x - center.x) / Math.max(1, Math.hypot(neighborCenter.x - center.x, neighborCenter.y - center.y)) * offset;
+          const dy = (neighborCenter.y - center.y) / Math.max(1, Math.hypot(neighborCenter.x - center.x, neighborCenter.y - center.y)) * offset;
+          const a = corners[edge];
+          const b = corners[(edge + 1) % 6];
+          ctx.save();
+          ctx.fillStyle = isOldSchool() ? "#777777" : "rgba(81, 54, 30, .46)";
+          ctx.beginPath();
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(b[0], b[1]);
+          ctx.lineTo(b[0] + dx, b[1] + dy);
+          ctx.lineTo(a[0] + dx, a[1] + dy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = isOldSchool() ? "#202020" : "rgba(67, 41, 21, .85)";
+          ctx.lineWidth = Math.max(1.2, 1.4 * state.scale);
+          ctx.beginPath();
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(b[0], b[1]);
+          ctx.stroke();
+          ctx.restore();
+        });
+      });
     }
 
     function drawOrganicTexture(q, r, x, y, size, terrain) {
