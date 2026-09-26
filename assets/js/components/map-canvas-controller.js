@@ -10,6 +10,11 @@
     canvas.addEventListener("pointerdown", event => {
       canvas.setPointerCapture(event.pointerId);
       const pos = pointerPos(event);
+      if (state.tool === "navigate") {
+        state.isPanning = true;
+        state.panStart = { x: event.clientX, y: event.clientY, ox: state.offsetX, oy: state.offsetY };
+        return;
+      }
       if (event.button === 2 || event.shiftKey || event.ctrlKey || event.code === "Space") {
         state.isPanning = true;
         state.panStart = { x: event.clientX, y: event.clientY, ox: state.offsetX, oy: state.offsetY };
@@ -118,6 +123,7 @@
     });
 
     canvas.addEventListener("dblclick", event => {
+      if (state.tool === "navigate") return;
       const pos = pointerPos(event);
       const cell = pixelToHex(pos.x, pos.y);
       if (cell) {

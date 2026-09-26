@@ -32,7 +32,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       };
       Object.entries(icons).forEach(([id, icon]) => addButtonIcon(id, icon));
       document.querySelectorAll("[data-tool]").forEach(button => {
-        const iconsByTool = { paint: "brush", place: "geo-alt", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
+        const iconsByTool = { navigate: "arrows-move", paint: "brush", place: "geo-alt", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
         const label = button.textContent.trim();
         button.innerHTML = `<i class="bi bi-${iconsByTool[button.dataset.tool]}" aria-hidden="true"></i><span>${label}</span>`;
       });
@@ -135,6 +135,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       terrainIconScaleValue: document.getElementById("terrainIconScaleValue"),
       terrainIconScaleLabel: document.getElementById("terrainIconScaleLabel"),
       toolGrid: document.getElementById("toolGrid"),
+      toolHint: document.getElementById("toolHint"),
       terrainSection: document.getElementById("terrainSection"),
       placeSection: document.getElementById("placeSection"),
       pathAssistSection: document.getElementById("pathAssistSection"),
@@ -820,6 +821,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.placeSection.hidden = tool !== "place";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
       els.editLabelSection.hidden = tool !== "select";
+      els.toolHint.textContent = tool === "navigate"
+        ? "Arraste para navegar pelo mapa. Esta ferramenta não seleciona nem altera elementos."
+        : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
       draw();
@@ -1769,4 +1773,3 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     centerMap();
     syncDetails();
     updatePlaces();
-
