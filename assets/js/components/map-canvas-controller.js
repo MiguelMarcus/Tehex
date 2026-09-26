@@ -39,9 +39,9 @@
         startFreePath(pos);
       } else {
         const cell = pixelToHex(pos.x, pos.y);
-        if (state.tool === "paint") state.hoveredBrush = cell;
+        if (state.tool === "paint" || state.tool === "relief") state.hoveredBrush = cell;
         if (cell) state.activePathKey = key(cell.q, cell.r);
-        if (cell && (state.tool === "paint" || state.tool === "place" || state.tool === "erase")) recordHistory();
+        if (cell && (state.tool === "paint" || state.tool === "place" || state.tool === "relief" || state.tool === "erase")) recordHistory();
         if (state.tool === "erase") {
           const existing = findPathAt(pos, "road");
           const river = existing === -1 ? findPathAt(pos, "river") : -1;
@@ -88,7 +88,7 @@
         }
         return;
       }
-      if (state.tool === "paint") {
+      if (state.tool === "paint" || state.tool === "relief") {
         const changed = !cell || !state.hoveredBrush || cell.q !== state.hoveredBrush.q || cell.r !== state.hoveredBrush.r;
         state.hoveredBrush = cell;
         if (changed) draw();
@@ -100,7 +100,7 @@
       }
       if (!cell) return;
       const hoveredKey = key(cell.q, cell.r);
-      if ((state.tool === "paint" || state.tool === "erase") && hoveredKey !== state.activePathKey) {
+      if ((state.tool === "paint" || state.tool === "relief" || state.tool === "erase") && hoveredKey !== state.activePathKey) {
         state.activePathKey = hoveredKey;
         if (state.tool === "erase") eraseFreePathsNear(pos);
         handleCell(cell);

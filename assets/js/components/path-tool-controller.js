@@ -33,7 +33,7 @@
         if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
       } else {
         recordHistory();
-        state.currentPath = { type: state.tool, snapToEdges: state.snapToEdges, snapToCenters: !state.snapToEdges, points: [point] };
+        state.currentPath = { type: state.tool, style: state.tool === "road" ? state.roadStyle : undefined, snapToEdges: state.snapToEdges, snapToCenters: !state.snapToEdges, points: [point] };
       }
       updateSelectionUi();
       draw();

@@ -2,6 +2,22 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     window.AppShell.mountApp(document.getElementById("app"));
 
+    const reliefTool = document.createElement("button");
+    reliefTool.dataset.tool = "relief";
+    reliefTool.title = "Ajustar a altura visual dos hexes";
+    reliefTool.textContent = "Relevo";
+    document.querySelector('[data-tool="paint"]').after(reliefTool);
+    const reliefSection = document.createElement("section");
+    reliefSection.id = "reliefSection";
+    reliefSection.className = "section context-section";
+    reliefSection.hidden = true;
+    reliefSection.innerHTML = '<h2>Relevo</h2><label class="range-row" for="reliefLevel">Altura: <span id="reliefLevelValue">1 nível</span><input id="reliefLevel" type="range" min="0" max="3" step="1" value="1"></label><p class="hint">Clique ou arraste pelos hexes desejados. Use 0 para remover o relevo.</p>';
+    document.getElementById("terrainSection").after(reliefSection);
+    const roadStyleRow = document.createElement("div");
+    roadStyleRow.className = "form-row";
+    roadStyleRow.innerHTML = '<label for="roadStyle">Estilo</label><select id="roadStyle"><option value="trail">Trilha</option><option value="simple" selected>Estrada simples</option><option value="main">Estrada principal</option></select>';
+    document.getElementById("roadOptionsSection").prepend(roadStyleRow);
+
     const brand = document.querySelector(".brand");
     brand.querySelector(".mark + div").classList.add("brand-copy");
     brand.appendChild(document.querySelector(".options-wrap"));
@@ -32,7 +48,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       };
       Object.entries(icons).forEach(([id, icon]) => addButtonIcon(id, icon));
       document.querySelectorAll("[data-tool]").forEach(button => {
-        const iconsByTool = { navigate: "arrows-move", paint: "brush", place: "geo-alt", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
+        const iconsByTool = { navigate: "arrows-move", paint: "brush", relief: "layers", place: "geo-alt", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
         const label = button.textContent.trim();
         button.innerHTML = `<i class="bi bi-${iconsByTool[button.dataset.tool]}" aria-hidden="true"></i><span>${label}</span>`;
       });
@@ -105,6 +121,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       toolGrid: document.getElementById("toolGrid"),
       toolHint: document.getElementById("toolHint"),
       terrainSection: document.getElementById("terrainSection"),
+      reliefSection: document.getElementById("reliefSection"),
+      reliefLevel: document.getElementById("reliefLevel"),
+      reliefLevelValue: document.getElementById("reliefLevelValue"),
       placeSection: document.getElementById("placeSection"),
       pathAssistSection: document.getElementById("pathAssistSection"),
       roadOptionsSection: document.getElementById("roadOptionsSection"),
@@ -121,6 +140,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       placeIconScaleLabel: document.getElementById("placeIconScaleLabel"),
       roadSnapToEdges: document.getElementById("roadSnapToEdges"),
       riverSnapToEdges: document.getElementById("riverSnapToEdges"),
+      roadStyle: document.getElementById("roadStyle"),
       optionsBtn: document.getElementById("optionsBtn"),
       optionsMenu: document.getElementById("optionsMenu"),
       menuNewMapBtn: document.getElementById("menuNewMapBtn"),
@@ -203,7 +223,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
     function cellAt(q, r) {
       const k = key(q, r);
-      if (!state.cells[k]) state.cells[k] = { terrain: "grass", showIcon: true, place: null, roads: [], rivers: [], notes: "" };
+      if (!state.cells[k]) state.cells[k] = { terrain: "grass", showIcon: true, place: null, roads: [], rivers: [], notes: "", elevation: 0 };
       return state.cells[k];
     }
 
@@ -364,9 +384,19 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(83, 157, 205, .95)", 3 * state.scale);
           if (!isOldSchool()) strokePath(path.points, "rgba(168, 220, 238, .85)", 2.2 * state.scale);
         } else {
-          strokePath(path.points, isOldSchool() ? "#000000" : "rgba(78, 48, 23, .72)", 7 * state.scale);
-          strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(183, 139, 75, .95)", 3 * state.scale);
-          if (!isOldSchool()) strokePath(path.points, "rgba(226, 197, 132, .92)", 1.6 * state.scale);
+          const style = path.style || "simple";
+          if (style === "trail") {
+            ctx.setLineDash([2 * state.scale, 6 * state.scale]);
+            strokePath(path.points, isOldSchool() ? "#000000" : "rgba(92, 62, 35, .78)", 3 * state.scale);
+          } else if (style === "main") {
+            strokePath(path.points, isOldSchool() ? "#000000" : "rgba(69, 41, 20, .8)", 12 * state.scale);
+            strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(197, 153, 88, .96)", 7 * state.scale);
+            strokePath(path.points, isOldSchool() ? "#000000" : "rgba(246, 220, 159, .95)", 1.6 * state.scale);
+          } else {
+            strokePath(path.points, isOldSchool() ? "#000000" : "rgba(78, 48, 23, .72)", 7 * state.scale);
+            strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(183, 139, 75, .95)", 3 * state.scale);
+            if (!isOldSchool()) strokePath(path.points, "rgba(226, 197, 132, .92)", 1.6 * state.scale);
+          }
         }
         ctx.restore();
       });
@@ -446,6 +476,17 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const variation = Math.round((hash(q, r, 1) - .5) * (isOldSchool() ? 10 : 8));
       ctx.fillStyle = shade(baseColor, variation);
       ctx.fill(path);
+      const elevation = Math.max(0, Math.min(3, Number(cell.elevation) || 0));
+      if (elevation) {
+        ctx.save();
+        ctx.strokeStyle = isOldSchool() ? "#505050" : shade(baseColor, -28);
+        ctx.lineWidth = Math.max(1, elevation * 1.2 * state.scale);
+        for (let level = 1; level <= elevation; level++) {
+          ctx.globalAlpha = .24 + level * .1;
+          ctx.stroke(hexPath(p.x, p.y + level * 3 * state.scale, Math.max(2, size - level * 3 * state.scale)));
+        }
+        ctx.restore();
+      }
       if (quality === "detail") drawPaperTexture(q, r, p.x, p.y, size);
       const isLargeMap = !state.isExporting && state.cols * state.rows > 40 * 40;
       const iconDensity = isLargeMap ? .2 : quality === "standard" ? .5 : 1;
@@ -550,9 +591,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function drawBrushPreview() {
-      if (state.tool !== "paint" || !state.hoveredBrush) return;
+      if ((state.tool !== "paint" && state.tool !== "relief") || !state.hoveredBrush) return;
       ctx.save();
-      ctx.strokeStyle = "rgba(214, 47, 47, .95)";
+      ctx.strokeStyle = state.tool === "relief" ? "rgba(123, 79, 32, .95)" : "rgba(214, 47, 47, .95)";
       ctx.lineWidth = Math.max(2, 2.5 * state.scale);
       ctx.setLineDash([6 * state.scale, 4 * state.scale]);
       cellsInBrush(state.hoveredBrush.q, state.hoveredBrush.r).forEach(({ q, r }) => {
@@ -578,21 +619,23 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const badgeY = place.iconPosition === "center" || (place.iconPosition !== "top" && !hasVisibleLabel) ? y : y - size * .2;
       const iconScale = place.iconScale || state.placeIconScales[place.type] || 1;
       const radius = size * .34 * Math.max(1, iconScale * .92);
-      ctx.shadowColor = "rgba(58, 35, 18, .28)";
-      ctx.shadowBlur = 4 * state.scale;
-      ctx.fillStyle = place.iconBackgroundColor || (isOldSchool() ? "#ffffff" : "rgba(209, 173, 102, .7)");
-      ctx.beginPath();
-      ctx.arc(x, badgeY, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = Math.max(2, 3 * state.scale);
-      ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(88, 54, 27, .74)");
-      ctx.stroke();
-      ctx.lineWidth = Math.max(1, 1.3 * state.scale);
-      ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(255, 234, 176, .72)");
-      ctx.beginPath();
-      ctx.arc(x, badgeY, radius - 4 * state.scale, 0, Math.PI * 2);
-      ctx.stroke();
+      if (place.iconBackgroundEnabled !== false) {
+        ctx.shadowColor = "rgba(58, 35, 18, .28)";
+        ctx.shadowBlur = 4 * state.scale;
+        ctx.fillStyle = place.iconBackgroundColor || (isOldSchool() ? "#ffffff" : "rgba(209, 173, 102, .7)");
+        ctx.beginPath();
+        ctx.arc(x, badgeY, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = Math.max(2, 3 * state.scale);
+        ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(88, 54, 27, .74)");
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1, 1.3 * state.scale);
+        ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(255, 234, 176, .72)");
+        ctx.beginPath();
+        ctx.arc(x, badgeY, radius - 4 * state.scale, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       drawSvgIcon(type.icon, x, badgeY, size * .48 * iconScale, .96);
       ctx.restore();
     }
@@ -657,6 +700,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       if (tool !== "paint") state.hoveredBrush = null;
       document.querySelectorAll("[data-tool]").forEach(btn => btn.classList.toggle("active", btn.dataset.tool === tool));
       els.terrainSection.hidden = tool !== "paint";
+      els.reliefSection.hidden = tool !== "relief";
       els.placeSection.hidden = tool !== "place";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
       els.roadOptionsSection.hidden = tool !== "road";
@@ -666,6 +710,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.editLabelSection.hidden = tool !== "select";
       els.toolHint.textContent = tool === "navigate"
         ? "Arraste para navegar pelo mapa. Esta ferramenta não seleciona nem altera elementos."
+        : tool === "relief"
+          ? "Clique ou arraste para aplicar a altura escolhida aos hexes."
         : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
@@ -812,12 +858,17 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       } else if (state.tool === "place") {
         const cell = cellAt(q, r);
         cell.place = { name: els.placeName.value.trim(), type: els.placeType.value };
+      } else if (state.tool === "relief") {
+        cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
+          cellAt(brushQ, brushR).elevation = state.reliefLevel;
+        });
       } else if (state.tool === "erase") {
         cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
           const cell = cellAt(brushQ, brushR);
           cell.place = null;
           cell.notes = "";
           cell.terrain = "grass";
+          cell.elevation = 0;
           removeCellConnections(brushQ, brushR);
         });
       }
@@ -1070,6 +1121,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         snapToEdges: state.snapToEdges,
         roadSnapToEdges: state.roadSnapToEdges,
         riverSnapToEdges: state.riverSnapToEdges,
+        roadStyle: state.roadStyle,
+        reliefLevel: state.reliefLevel,
         brushSize: state.brushSize,
         borderColor: state.borderColor,
         terrainIconScale: state.terrainIconScale,
@@ -1130,6 +1183,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.snapToEdges = Boolean(data.snapToEdges);
       state.roadSnapToEdges = Boolean(data.roadSnapToEdges ?? data.snapToEdges);
       state.riverSnapToEdges = Boolean(data.riverSnapToEdges ?? data.snapToEdges);
+      state.roadStyle = ["trail", "simple", "main"].includes(data.roadStyle) ? data.roadStyle : "simple";
+      state.reliefLevel = Math.max(0, Math.min(3, Number(data.reliefLevel ?? 1)));
       if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
       if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
       state.brushSize = Math.max(1, Math.min(4, Number(data.brushSize) || 1));
@@ -1147,6 +1202,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.roadStyle.value = state.roadStyle;
+      els.reliefLevel.value = state.reliefLevel;
+      els.reliefLevelValue.textContent = state.reliefLevel + (state.reliefLevel === 1 ? " nível" : " níveis");
       els.brushSize.value = state.brushSize;
       els.brushSizeValue.textContent = state.brushSize + (state.brushSize === 1 ? " hex" : " hexes");
       updateTerrainScaleControl();
@@ -1183,6 +1241,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.snapToEdges = false;
       state.roadSnapToEdges = false;
       state.riverSnapToEdges = false;
+      state.roadStyle = "simple";
+      state.reliefLevel = 1;
       state.brushSize = 1;
       state.borderColor = "#77664b";
       state.terrainIconScale = 1;
@@ -1214,6 +1274,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.roadStyle.value = state.roadStyle;
+      els.reliefLevel.value = state.reliefLevel;
+      els.reliefLevelValue.textContent = "1 nível";
       updateTerrainScaleControl();
       updatePlacePreview();
       fitMap();
@@ -1400,6 +1463,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.snapToEdges = false;
       state.roadSnapToEdges = false;
       state.riverSnapToEdges = false;
+      state.roadStyle = "simple";
+      state.reliefLevel = 1;
       state.brushSize = 1;
       state.borderColor = "#77664b";
       state.terrainIconScale = 1;
@@ -1415,6 +1480,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.roadStyle.value = state.roadStyle;
+      els.reliefLevel.value = state.reliefLevel;
+      els.reliefLevelValue.textContent = "1 nível";
       updateTerrainScaleControl();
       updatePlacePreview();
       closeNewMapDialog();
@@ -1434,6 +1502,11 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       updatePlacePreview();
       updatePathSelectionUi();
       els.paintShowIcon.addEventListener("change", () => { state.paintShowIcon = els.paintShowIcon.checked; });
+      els.reliefLevel.addEventListener("input", () => {
+        state.reliefLevel = Number(els.reliefLevel.value);
+        els.reliefLevelValue.textContent = state.reliefLevel + (state.reliefLevel === 1 ? " nível" : " níveis");
+        scheduleSave();
+      });
       els.selectedTextScale.addEventListener("input", () => {
         els.selectedTextScaleValue.textContent = els.selectedTextScale.value + "%";
       });
@@ -1463,6 +1536,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.riverSnapToEdges.addEventListener("change", () => {
         state.riverSnapToEdges = els.riverSnapToEdges.checked;
         if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
+        scheduleSave();
+      });
+      els.roadStyle.addEventListener("change", () => {
+        state.roadStyle = els.roadStyle.value;
         scheduleSave();
       });
       els.deleteSelectedPathBtn.addEventListener("click", deleteSelectedPath);

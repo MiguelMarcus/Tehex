@@ -24,6 +24,8 @@
       snapToEdges: false,
       roadSnapToEdges: false,
       riverSnapToEdges: false,
+      roadStyle: "simple",
+      reliefLevel: 1,
       cells: {},
       paths: [],
       currentPath: null,

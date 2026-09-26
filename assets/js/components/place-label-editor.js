@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const styleKeys = ["textScale", "labelPosition", "showLabel", "labelFont", "textColor", "labelBorder", "borderColor", "type", "iconScale", "iconPosition", "iconBackgroundColor", "iconBorderColor"];
+  const styleKeys = ["textScale", "labelPosition", "showLabel", "labelFont", "textColor", "labelBorder", "borderColor", "type", "iconScale", "iconPosition", "iconBackgroundEnabled", "iconBackgroundColor", "iconBorderColor"];
   const fonts = [["Georgia, serif", "Georgia"], ["Palatino Linotype, Palatino, serif", "Palatino"], ["Times New Roman, serif", "Times New Roman"]];
 
   function field(label, control) {
@@ -70,6 +70,8 @@
     iconBackgroundColor.type = "color";
     const iconBorderColor = document.createElement("input");
     iconBorderColor.type = "color";
+    const iconBackgroundEnabled = document.createElement("input");
+    iconBackgroundEnabled.type = "checkbox";
     const borderEnabled = document.createElement("input");
     borderEnabled.type = "checkbox";
     const visible = document.createElement("input");
@@ -80,6 +82,9 @@
     const visibleField = document.createElement("label");
     visibleField.className = "place-label-editor__visibility";
     visibleField.append(visible, document.createTextNode("Mostrar rótulo no mapa"));
+    const iconBackgroundField = document.createElement("label");
+    iconBackgroundField.className = "place-label-editor__visibility";
+    iconBackgroundField.append(iconBackgroundEnabled, document.createTextNode("Mostrar fundo do ícone"));
 
     function setValues(data) {
       const textSize = Math.round((Number(data.textScale) || 1) * 100);
@@ -94,12 +99,13 @@
       borderColor.value = data.borderColor || "#fff9f0";
       iconBackgroundColor.value = data.iconBackgroundColor || "#d1ad66";
       iconBorderColor.value = data.iconBorderColor || "#58361b";
+      iconBackgroundEnabled.checked = data.iconBackgroundEnabled !== false;
       borderEnabled.checked = data.labelBorder !== false;
       visible.checked = data.showLabel !== false;
     }
 
     function value() {
-      return { name: name.value, textScale: Number(scale.value) / 100, labelPosition: position.value, showLabel: visible.checked, labelFont: font.value, textColor: textColor.value, labelBorder: borderEnabled.checked, borderColor: borderColor.value, type: icon.value, iconScale: Number(iconScale.value) / 100, iconPosition: iconPosition.value, iconBackgroundColor: iconBackgroundColor.value, iconBorderColor: iconBorderColor.value };
+      return { name: name.value, textScale: Number(scale.value) / 100, labelPosition: position.value, showLabel: visible.checked, labelFont: font.value, textColor: textColor.value, labelBorder: borderEnabled.checked, borderColor: borderColor.value, type: icon.value, iconScale: Number(iconScale.value) / 100, iconPosition: iconPosition.value, iconBackgroundEnabled: iconBackgroundEnabled.checked, iconBackgroundColor: iconBackgroundColor.value, iconBorderColor: iconBorderColor.value };
     }
 
     function syncSize(source, target, max) {
@@ -112,7 +118,7 @@
     }
 
     setValues(place);
-    [name, position, font, icon, iconPosition, textColor, borderColor, iconBackgroundColor, iconBorderColor, borderEnabled, visible].forEach(control => control.addEventListener(control.type === "checkbox" || control.tagName === "SELECT" ? "change" : "input", () => onChange(value())));
+    [name, position, font, icon, iconPosition, textColor, borderColor, iconBackgroundColor, iconBorderColor, iconBackgroundEnabled, borderEnabled, visible].forEach(control => control.addEventListener(control.type === "checkbox" || control.tagName === "SELECT" ? "change" : "input", () => onChange(value())));
     syncSize(scale, scaleNumber, 300);
     syncSize(scaleNumber, scale, 300);
     syncSize(iconScale, iconNumber, 180);
@@ -159,7 +165,7 @@
     const styles = document.createElement("div");
     styles.className = "place-label-editor__styles";
     styles.append(field("Salvar estilo", styleName), savedStyles, styleActions);
-    editor.append(title, field("Texto", name), field("Tamanho do texto (%)", scaleWrap), field("Posição do texto", position), field("Fonte", font), colors, borderField, visibleField, field("Ícone", icon), field("Tamanho do ícone (%)", iconScaleWrap), field("Posição do ícone", iconPosition), styles);
+    editor.append(title, field("Texto", name), field("Tamanho do texto (%)", scaleWrap), field("Posição do texto", position), field("Fonte", font), colors, borderField, visibleField, field("Ícone", icon), field("Tamanho do ícone (%)", iconScaleWrap), field("Posição do ícone", iconPosition), iconBackgroundField, styles);
     return editor;
   }
 
