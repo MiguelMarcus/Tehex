@@ -24,5 +24,9 @@ Abra `https://miguelmarcus.github.io/Tehex/` em um navegador. O editor salva os 
 - Terrenos organizados por familia.
 - Lugares com icones, nomes e tamanhos independentes.
 - Ruas e rios livres, com assistencia opcional nas arestas.
+- Camadas visuais independentes para terreno, grade, relevo, lugares, nomes, ruas e rios.
+- Biblioteca reutilizavel de estilos e legenda automatica do mapa.
+- Exportacao configuravel em PNG, JPEG ou WebP, com titulo, fundo, coordenadas e legenda.
+- Atalhos de teclado e painel de ajuda contextual.
 - Mapas salvos localmente no navegador.
 

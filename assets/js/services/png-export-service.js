@@ -32,15 +32,15 @@
     return output;
   }
 
-  function toBlob(canvas) {
-    const dataUrl = canvas.toDataURL("image/png");
-    if (dataUrl === "data:," || dataUrl.length < 64) throw new Error("O navegador nao conseguiu codificar a imagem PNG.");
+  function toBlob(canvas, type = "image/png", quality = 0.92) {
+    const dataUrl = canvas.toDataURL(type, quality);
+    if (dataUrl === "data:," || dataUrl.length < 64) throw new Error("O navegador nao conseguiu codificar a imagem.");
     const encoded = dataUrl.split(",")[1];
     const binary = atob(encoded);
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-    const blob = new Blob([bytes], { type: "image/png" });
-    if (!blob.size) throw new Error("O PNG gerado esta vazio.");
+    const blob = new Blob([bytes], { type });
+    if (!blob.size) throw new Error("A imagem gerada esta vazia.");
     return Promise.resolve(blob);
   }
 

@@ -1,6 +1,7 @@
 const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     window.AppShell.mountApp(document.getElementById("app"));
+    WorkspaceFeatures.mount();
 
     const reliefTool = document.createElement("button");
     reliefTool.dataset.tool = "relief";
@@ -49,8 +50,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       Object.entries(icons).forEach(([id, icon]) => addButtonIcon(id, icon));
       document.querySelectorAll("[data-tool]").forEach(button => {
         const iconsByTool = { navigate: "arrows-move", paint: "brush", relief: "layers", place: "geo-alt", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
+        const shortcutsByTool = { navigate: "N", paint: "P", relief: "H", place: "L", road: "E", river: "I", erase: "A", select: "D" };
         const label = button.textContent.trim();
         button.innerHTML = `<i class="bi bi-${iconsByTool[button.dataset.tool]}" aria-hidden="true"></i><span>${label}</span>`;
+        button.title += ` (${shortcutsByTool[button.dataset.tool]})`;
       });
     }
 
@@ -107,6 +110,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     });
 
     const state = MapState.create();
+    const defaultLayers = () => ({ terrain: true, terrainIcons: true, relief: true, places: true, labels: true, roads: true, rivers: true, grid: true, coordinates: false });
 
     let history;
 
@@ -187,6 +191,30 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       applyDetailsBtn: document.getElementById("applyDetailsBtn"),
       placeList: document.getElementById("placeList")
     };
+    Object.assign(els, {
+      layersBtn: document.getElementById("layersBtn"),
+      layersModal: document.getElementById("layersModal"),
+      legendBtn: document.getElementById("legendBtn"),
+      legendModal: document.getElementById("legendModal"),
+      legendPreview: document.getElementById("legendPreview"),
+      legendNotes: document.getElementById("legendNotes"),
+      styleLibraryBtn: document.getElementById("styleLibraryBtn"),
+      styleLibraryModal: document.getElementById("styleLibraryModal"),
+      styleProfileName: document.getElementById("styleProfileName"),
+      saveStyleProfileBtn: document.getElementById("saveStyleProfileBtn"),
+      styleProfileList: document.getElementById("styleProfileList"),
+      helpBtn: document.getElementById("helpBtn"),
+      helpModal: document.getElementById("helpModal"),
+      exportOptionsModal: document.getElementById("exportOptionsModal"),
+      exportFormat: document.getElementById("exportFormat"),
+      exportResolution: document.getElementById("exportResolution"),
+      exportTitle: document.getElementById("exportTitle"),
+      exportLegend: document.getElementById("exportLegend"),
+      exportBackground: document.getElementById("exportBackground"),
+      exportCoordinates: document.getElementById("exportCoordinates"),
+      exportGrid: document.getElementById("exportGrid"),
+      confirmExportBtn: document.getElementById("confirmExportBtn")
+    });
 
     els.newMapCols.max = 300;
     els.newMapRows.max = 200;
@@ -296,25 +324,35 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const rect = canvas.getBoundingClientRect();
       const range = MapRenderPerformance.visibleRange(rect, state, pixelToWorld);
       const quality = state.isExporting ? "detail" : MapRenderPerformance.detailLevel(state.scale);
-      ctx.fillStyle = isOldSchool() ? "#d8d8d8" : "#f4ecd9";
-      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      if (!state.isExporting || state.exportBackground !== false) {
+        ctx.fillStyle = isOldSchool() ? "#d8d8d8" : "#f4ecd9";
+        ctx.fillRect(0, 0, rect.width, rect.height);
+      }
       MapRenderPerformance.forEachCell(range, (q, r) => drawHex(q, r, quality));
-      BiomeBorderRenderer.draw(ctx, {
-        state, cellAt, terrainById, neighborEdges, hexToPixel, hexCorners,
-        displayColor, blendColors, hash, isOldSchool, range, quality
-      });
-      drawElevationEdges(range);
+      if (state.layers.terrain) {
+        BiomeBorderRenderer.draw(ctx, {
+          state, cellAt, terrainById, neighborEdges, hexToPixel, hexCorners,
+          displayColor, blendColors, hash, isOldSchool, range, quality
+        });
+      }
+      if (state.layers.relief) drawElevationEdges(range);
       ctx.save();
       clipToMap(range);
-      drawLegacyConnections("river", range);
-      drawLegacyConnections("road", range);
-      drawFreePaths("river");
-      drawFreePaths("road");
-      drawPlaces(range);
+      if (state.layers.rivers) {
+        drawLegacyConnections("river", range);
+        drawFreePaths("river");
+      }
+      if (state.layers.roads) {
+        drawLegacyConnections("road", range);
+        drawFreePaths("road");
+      }
+      if (state.layers.places) drawPlaces(range);
       ctx.restore();
       drawSelectedHex();
       drawBrushPreview();
-      drawPlaceLabels(range);
+      if (state.layers.labels) drawPlaceLabels(range);
+      if (state.layers.coordinates) drawCoordinates(range);
     }
 
     const scheduleRender = MapRenderPerformance.createFrameScheduler(renderNow);
@@ -475,18 +513,18 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const path = hexPath(p.x, p.y, size);
       const baseColor = isOldSchool() ? oldSchoolTerrainColor(terrain) : displayColor(terrain.color);
       const variation = Math.round((hash(q, r, 1) - .5) * (isOldSchool() ? 10 : 8));
-      ctx.fillStyle = shade(baseColor, variation);
+      ctx.fillStyle = state.layers.terrain ? shade(baseColor, variation) : (isOldSchool() ? "#eeeeee" : "#efe9de");
       ctx.fill(path);
       if (quality === "detail") drawPaperTexture(q, r, p.x, p.y, size);
       const isLargeMap = !state.isExporting && state.cols * state.rows > 40 * 40;
       const iconDensity = isLargeMap ? .2 : quality === "standard" ? .5 : 1;
       const previewIcon = quality !== "overview" && hash(q, r, 703) < iconDensity;
-      if (previewIcon && cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
+      if (state.layers.terrainIcons && previewIcon && cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
         const iconQualityScale = isLargeMap ? .72 : quality === "detail" ? 1 : .7;
         const iconOpacity = isLargeMap ? .46 : .78;
         drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * iconQualityScale * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), iconOpacity);
       }
-      if (state.borderColor !== "none") {
+      if (state.layers.grid && state.borderColor !== "none") {
         ctx.strokeStyle = isOldSchool() ? "#000000" : state.borderColor;
         ctx.lineWidth = Math.max(.6, .75 * state.scale);
         ctx.stroke(path);
@@ -721,6 +759,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         }
         ctx.fillStyle = cell.place.textColor || (isOldSchool() ? "#151513" : "#3b2318");
         ctx.fillText(text, p.x, y);
+      });
+      ctx.restore();
+    }
+
+    function drawCoordinates(range) {
+      if (state.scale < .55 && !state.isExporting) return;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `600 ${Math.max(8, 9 * state.scale)}px Inter, sans-serif`;
+      ctx.fillStyle = isOldSchool() ? "rgba(0,0,0,.58)" : "rgba(62,48,32,.55)";
+      MapRenderPerformance.forEachCell(range, (q, r) => {
+        const point = hexToPixel(q, r);
+        ctx.fillText(q + "," + r, point.x, point.y + state.hexSize * state.scale * .62);
       });
       ctx.restore();
     }
@@ -1168,6 +1220,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         riverSnapToEdges: state.riverSnapToEdges,
         roadStyle: state.roadStyle,
         reliefLevel: state.reliefLevel,
+        layers: state.layers,
+        legendNotes: state.legendNotes,
         brushSize: state.brushSize,
         borderColor: state.borderColor,
         terrainIconScale: state.terrainIconScale,
@@ -1230,6 +1284,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.riverSnapToEdges = Boolean(data.riverSnapToEdges ?? data.snapToEdges);
       state.roadStyle = ["trail", "simple", "main"].includes(data.roadStyle) ? data.roadStyle : "simple";
       state.reliefLevel = Math.max(0, Math.min(3, Number(data.reliefLevel ?? 1)));
+      state.layers = { ...defaultLayers(), ...(data.layers || {}) };
+      state.legendNotes = typeof data.legendNotes === "string" ? data.legendNotes : "";
       if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
       if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
       state.brushSize = Math.max(1, Math.min(4, Number(data.brushSize) || 1));
@@ -1288,6 +1344,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.riverSnapToEdges = false;
       state.roadStyle = "simple";
       state.reliefLevel = 1;
+      state.layers = defaultLayers();
+      state.legendNotes = "";
       state.brushSize = 1;
       state.borderColor = "#77664b";
       state.terrainIconScale = 1;
@@ -1365,8 +1423,76 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       DownloadService.saveText(content, filename, type);
     }
 
-    async function exportPng() {
-      const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase() + ".png";
+    function legendItems() {
+      const items = [];
+      const usedTerrains = new Set();
+      const usedPlaces = new Set();
+      Object.values(state.cells).forEach(cell => {
+        if (cell.terrain) usedTerrains.add(cell.terrain);
+        if (cell.place?.type) usedPlaces.add(cell.place.type);
+      });
+      if (state.layers.terrain) {
+        terrains.filter(terrain => usedTerrains.has(terrain.id)).forEach(terrain => items.push({ label: terrain.name, color: displayColor(terrain.color) }));
+      }
+      if (state.layers.places) {
+        Object.entries(placeTypes).filter(([id]) => usedPlaces.has(id)).forEach(([, place]) => items.push({ label: place.label, color: "#a9793f" }));
+      }
+      if (state.layers.roads && state.paths.some(path => path.type === "road")) items.push({ label: "Ruas e estradas", color: "#b78b4b" });
+      if (state.layers.rivers && state.paths.some(path => path.type === "river")) items.push({ label: "Rios", color: "#539dcd" });
+      if (state.layers.relief && Object.values(state.cells).some(cell => Number(cell.elevation) > 0)) items.push({ label: "Relevo elevado", color: "#705235" });
+      state.legendNotes.split("\n").map(line => line.trim()).filter(Boolean).forEach(line => items.push({ label: line, color: "#817568" }));
+      return items;
+    }
+
+    function renderLegendPreview() {
+      els.legendPreview.replaceChildren();
+      const items = legendItems();
+      if (!items.length) {
+        els.legendPreview.textContent = "A legenda aparecerá quando o mapa possuir elementos.";
+        return;
+      }
+      items.forEach(item => {
+        const row = document.createElement("div");
+        row.className = "legend-preview-item";
+        const swatch = document.createElement("span");
+        swatch.className = "legend-preview-swatch";
+        swatch.style.background = item.color;
+        const label = document.createElement("span");
+        label.textContent = item.label;
+        row.append(swatch, label);
+        els.legendPreview.appendChild(row);
+      });
+    }
+
+    function drawExportLegend(imageCtx, width, startY, items, scale) {
+      if (!items.length) return;
+      const columns = Math.min(3, Math.max(1, items.length));
+      const columnWidth = (width - 48 * scale) / columns;
+      const rowHeight = 25 * scale;
+      imageCtx.save();
+      imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
+      imageCtx.font = `700 ${Math.round(15 * scale)}px Georgia, serif`;
+      imageCtx.fillText("Legenda", 24 * scale, startY + 23 * scale);
+      imageCtx.font = `500 ${Math.round(11 * scale)}px Inter, sans-serif`;
+      items.forEach((item, index) => {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        const x = 24 * scale + column * columnWidth;
+        const y = startY + 43 * scale + row * rowHeight;
+        imageCtx.fillStyle = item.color;
+        imageCtx.fillRect(x, y - 11 * scale, 14 * scale, 14 * scale);
+        imageCtx.strokeStyle = "rgba(0,0,0,.25)";
+        imageCtx.strokeRect(x, y - 11 * scale, 14 * scale, 14 * scale);
+        imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
+        imageCtx.fillText(item.label, x + 21 * scale, y);
+      });
+      imageCtx.restore();
+    }
+
+    async function exportImage(options) {
+      const type = options.type || "image/png";
+      const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[type] || "png";
+      const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase() + "." + extension;
       const dpr = window.devicePixelRatio || 1;
       const old = {
         width: canvas.width,
@@ -1378,18 +1504,23 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         offsetY: state.offsetY,
         selected: state.selected,
         currentPath: state.currentPath,
-        isExporting: state.isExporting
+        isExporting: state.isExporting,
+        layers: { ...state.layers },
+        exportBackground: state.exportBackground
       };
-      const requestedScale = 2.5;
-      const maxExportSide = 3072;
+      const requestedScale = Number(options.resolution) || 2.25;
+      const maxExportSide = 6144;
       const maxScaleByWidth = maxExportSide / (state.hexSize * (Math.sqrt(3) * state.cols + 1.8));
       const maxScaleByHeight = maxExportSide / (state.hexSize * (1.5 * (state.rows - 1) + 3.8));
       const exportScale = Math.min(requestedScale, maxScaleByWidth, maxScaleByHeight);
       const size = state.hexSize * exportScale;
       const margin = Math.round(size * .9);
-      const titleHeight = 82;
+      const titleHeight = options.title ? 82 : 0;
+      const items = options.legend ? legendItems() : [];
+      const legendHeight = options.legend && items.length ? Math.ceil(items.length / 3) * 25 * exportScale + 58 * exportScale : 0;
       const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
-      const height = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
+      const mapHeight = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
+      const height = Math.ceil(mapHeight + legendHeight);
       try {
         exportProgress.show();
         exportProgress.update(0, "Carregando todos os icones...");
@@ -1398,12 +1529,14 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state.scale = exportScale;
         state.selected = null;
         state.currentPath = null;
+        state.exportBackground = options.background || type === "image/jpeg";
+        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: Boolean(options.grid) };
         // Confirma visualmente a previsualizacao completa antes de iniciar a
-        // varredura por blocos usada para montar o PNG final.
+        // varredura por blocos usada para montar a imagem final.
         renderNow();
         await new Promise(resolve => requestAnimationFrame(resolve));
         exportProgress.update(0, "Iniciando renderizacao completa...");
-        els.saveStatus.textContent = "Gerando PNG em partes...";
+        els.saveStatus.textContent = "Gerando imagem em partes...";
         const image = await PngExportService.renderInTiles({
           canvas,
           ctx,
@@ -1420,21 +1553,24 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           }
         });
         const imageCtx = image.getContext("2d");
-        imageCtx.save();
-        imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
-        imageCtx.textAlign = "center";
-        imageCtx.textBaseline = "middle";
-        imageCtx.font = "800 " + Math.round(24 * exportScale) + "px Georgia, 'Times New Roman', serif";
-        imageCtx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
-        imageCtx.restore();
-        const png = await PngExportService.toBlob(image);
+        if (options.title) {
+          imageCtx.save();
+          imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
+          imageCtx.textAlign = "center";
+          imageCtx.textBaseline = "middle";
+          imageCtx.font = "800 " + Math.round(24 * exportScale) + "px Georgia, 'Times New Roman', serif";
+          imageCtx.fillText(state.mapName || "Mapa Hex", width / 2, titleHeight / 2);
+          imageCtx.restore();
+        }
+        if (items.length) drawExportLegend(imageCtx, width, mapHeight, items, exportScale);
+        const blob = await PngExportService.toBlob(image, type);
         exportProgress.update(100, "Preparando download...");
-        const link = DownloadService.createDownloadLink(png, filename);
+        const link = DownloadService.createDownloadLink(blob, filename);
         els.saveStatus.replaceChildren(link);
         link.click();
       } catch (error) {
-        console.error("Falha ao exportar PNG", error);
-        els.saveStatus.textContent = "Nao foi possivel exportar o PNG";
+        console.error("Falha ao exportar imagem", error);
+        els.saveStatus.textContent = "Nao foi possivel exportar a imagem";
       } finally {
         canvas.style.width = old.styleWidth;
         canvas.style.height = old.styleHeight;
@@ -1447,6 +1583,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state.selected = old.selected;
         state.currentPath = old.currentPath;
         state.isExporting = old.isExporting;
+        state.layers = old.layers;
+        state.exportBackground = old.exportBackground;
         exportProgress.hide();
         draw();
       }
@@ -1510,6 +1648,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.riverSnapToEdges = false;
       state.roadStyle = "simple";
       state.reliefLevel = 1;
+      state.layers = defaultLayers();
+      state.legendNotes = "";
       state.brushSize = 1;
       state.borderColor = "#77664b";
       state.terrainIconScale = 1;
@@ -1535,6 +1675,111 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       syncDetails();
       updatePlaces();
       saveLocal();
+    }
+
+    function openFeatureModal(modal) {
+      els.optionsMenu.hidden = true;
+      modal.hidden = false;
+    }
+
+    function syncLayerControls() {
+      document.querySelectorAll("[data-layer]").forEach(input => {
+        input.checked = state.layers[input.dataset.layer] !== false;
+      });
+    }
+
+    function currentStyleSettings() {
+      return {
+        mapStyle: state.mapStyle,
+        borderColor: state.borderColor,
+        terrainIconScale: state.terrainIconScale,
+        terrainIconScales: { ...state.terrainIconScales },
+        placeIconScales: { ...state.placeIconScales },
+        roadStyle: state.roadStyle,
+        roadSnapToEdges: state.roadSnapToEdges,
+        riverSnapToEdges: state.riverSnapToEdges,
+        reliefLevel: state.reliefLevel
+      };
+    }
+
+    function applyStyleSettings(settings) {
+      state.mapStyle = settings.mapStyle === "oldschool" ? "oldschool" : "modern";
+      state.borderColor = borderColors.includes(settings.borderColor) ? settings.borderColor : state.borderColor;
+      state.terrainIconScale = Number(settings.terrainIconScale) || 1;
+      state.terrainIconScales = { ...(settings.terrainIconScales || {}) };
+      state.placeIconScales = { ...(settings.placeIconScales || {}) };
+      state.roadStyle = ["trail", "simple", "main"].includes(settings.roadStyle) ? settings.roadStyle : "simple";
+      state.roadSnapToEdges = Boolean(settings.roadSnapToEdges);
+      state.riverSnapToEdges = Boolean(settings.riverSnapToEdges);
+      if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
+      if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
+      state.reliefLevel = Math.max(0, Math.min(3, Number(settings.reliefLevel ?? 1)));
+      els.roadStyle.value = state.roadStyle;
+      els.roadSnapToEdges.checked = state.roadSnapToEdges;
+      els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.reliefLevel.value = state.reliefLevel;
+      els.reliefLevelValue.textContent = state.reliefLevel + (state.reliefLevel === 1 ? " nível" : " níveis");
+      updateTerrainScaleControl();
+      updatePlacePreview();
+      scheduleSave();
+      draw();
+    }
+
+    function renderStyleProfiles() {
+      els.styleProfileList.replaceChildren();
+      const profiles = MapStyleLibrary.list();
+      if (!profiles.length) {
+        const empty = document.createElement("p");
+        empty.className = "hint";
+        empty.textContent = "Nenhum estilo salvo ainda.";
+        els.styleProfileList.appendChild(empty);
+        return;
+      }
+      profiles.forEach(profile => {
+        const row = document.createElement("div");
+        row.className = "style-profile-item";
+        const name = document.createElement("strong");
+        name.textContent = profile.name;
+        const apply = document.createElement("button");
+        apply.textContent = "Aplicar";
+        apply.addEventListener("click", () => applyStyleSettings(profile.settings || {}));
+        const remove = document.createElement("button");
+        remove.textContent = "Excluir";
+        remove.hidden = Boolean(profile.builtIn);
+        remove.addEventListener("click", () => {
+          MapStyleLibrary.remove(profile.id);
+          renderStyleProfiles();
+        });
+        row.append(name, apply, remove);
+        els.styleProfileList.appendChild(row);
+      });
+    }
+
+    function openExportOptions() {
+      els.exportCoordinates.checked = state.layers.coordinates;
+      els.exportGrid.checked = state.layers.grid;
+      els.exportBackground.checked = true;
+      openFeatureModal(els.exportOptionsModal);
+    }
+
+    function handleToolShortcut(event) {
+      const target = event.target;
+      if (event.key === "Escape") {
+        document.querySelectorAll(".modal:not([hidden])").forEach(modal => { modal.hidden = true; });
+        return;
+      }
+      if (target.matches("input, textarea, select") || target.isContentEditable) return;
+      if (event.key === "?" || event.key === "F1") {
+        event.preventDefault();
+        openFeatureModal(els.helpModal);
+        return;
+      }
+      if (document.querySelector(".modal:not([hidden])")) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const tool = { n: "navigate", p: "paint", h: "relief", l: "place", e: "road", i: "river", a: "erase", d: "select" }[event.key.toLowerCase()];
+      if (!tool) return;
+      event.preventDefault();
+      setTool(tool);
     }
 
     function initControls() {
@@ -1599,7 +1844,19 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.toggleRightPanelBtn.addEventListener("click", toggleRightPanel);
       els.saveBtn.addEventListener("click", saveLocal);
       els.exportJsonBtn.addEventListener("click", () => download("mapa-hex.json", JSON.stringify(exportState(), null, 2), "application/json"));
-      els.exportPngBtn.addEventListener("click", exportPng);
+      els.exportPngBtn.addEventListener("click", openExportOptions);
+      els.confirmExportBtn.addEventListener("click", () => {
+        els.exportOptionsModal.hidden = true;
+        exportImage({
+          type: els.exportFormat.value,
+          resolution: Number(els.exportResolution.value),
+          title: els.exportTitle.checked,
+          legend: els.exportLegend.checked,
+          background: els.exportBackground.checked,
+          coordinates: els.exportCoordinates.checked,
+          grid: els.exportGrid.checked
+        });
+      });
       els.importBtn.addEventListener("click", () => els.importFile.click());
       els.importFile.addEventListener("change", async () => {
         const file = els.importFile.files[0];
@@ -1616,6 +1873,44 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       });
       els.mapOptionsBtn.addEventListener("click", openMapOptions);
       els.savedMapsBtn.addEventListener("click", openSavedMaps);
+      els.layersBtn.addEventListener("click", () => {
+        syncLayerControls();
+        openFeatureModal(els.layersModal);
+      });
+      els.legendBtn.addEventListener("click", () => {
+        els.legendNotes.value = state.legendNotes;
+        renderLegendPreview();
+        openFeatureModal(els.legendModal);
+      });
+      els.styleLibraryBtn.addEventListener("click", () => {
+        renderStyleProfiles();
+        openFeatureModal(els.styleLibraryModal);
+      });
+      els.helpBtn.addEventListener("click", () => openFeatureModal(els.helpModal));
+      document.querySelectorAll("[data-layer]").forEach(input => {
+        input.addEventListener("change", () => {
+          state.layers[input.dataset.layer] = input.checked;
+          scheduleSave();
+          draw();
+        });
+      });
+      els.legendNotes.addEventListener("input", () => {
+        state.legendNotes = els.legendNotes.value;
+        renderLegendPreview();
+        scheduleSave();
+      });
+      els.saveStyleProfileBtn.addEventListener("click", () => {
+        const name = els.styleProfileName.value.trim() || "Estilo " + (MapStyleLibrary.list().filter(item => !item.builtIn).length + 1);
+        MapStyleLibrary.save(name, currentStyleSettings());
+        els.styleProfileName.value = "";
+        renderStyleProfiles();
+      });
+      document.querySelectorAll("[data-close-modal]").forEach(button => {
+        button.addEventListener("click", () => { document.getElementById(button.dataset.closeModal).hidden = true; });
+      });
+      [els.layersModal, els.legendModal, els.styleLibraryModal, els.exportOptionsModal, els.helpModal].forEach(modal => {
+        modal.addEventListener("click", event => { if (event.target === modal) modal.hidden = true; });
+      });
       els.closeNewMapBtn.addEventListener("click", closeNewMapDialog);
       els.cancelNewMapBtn.addEventListener("click", closeNewMapDialog);
       els.createMapBtn.addEventListener("click", createNewMap);
@@ -1644,8 +1939,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.zoomIn.addEventListener("click", () => setZoom(state.scale + .15));
       els.zoomOut.addEventListener("click", () => setZoom(state.scale - .15));
       els.centerBtn.addEventListener("click", centerMap);
+      document.addEventListener("keydown", handleToolShortcut);
           document.addEventListener("keydown", event => {
             if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
+            if (event.target.matches("input, textarea, select") || event.target.isContentEditable) return;
             event.preventDefault();
             if (event.shiftKey) redo();
             else undo();
