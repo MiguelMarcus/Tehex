@@ -373,7 +373,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function drawLegacyConnections(type, range) {
       ctx.save();
-      ctx.lineCap = "round";
+      ctx.lineCap = "butt";
       ctx.lineJoin = "round";
       ctx.strokeStyle = isOldSchool() ? "#000000" : (type === "road" ? "rgba(111, 71, 32, .9)" : "rgba(36, 111, 174, .92)");
       ctx.lineWidth = (type === "road" ? 6 : 8) * state.scale;
@@ -415,7 +415,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const paths = [...(state.paths || []), state.currentPath].filter(path => path && path.type === type && path.points.length > 1);
       paths.forEach(path => {
         ctx.save();
-        ctx.lineCap = "round";
+        ctx.lineCap = "butt";
         ctx.lineJoin = "round";
         const strokePath = path.snapToEdges ? strokeLinearPath : strokeSmoothPath;
         if (type === "river") {
@@ -1005,7 +1005,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       recordHistory, scheduleSave, draw
     });
     const {
-      addFreePathPoint, deleteSelectedPath, eraseNear: eraseFreePathsNear,
+      addFreePathPoint, clearSelection: clearPathSelection, deleteSelectedPath, eraseNear: eraseFreePathsNear,
       findPathAt, findPathEndpointAt, finishFreePath, selectPath,
       startFreePath, startPathFromEndpoint, updateSelectionUi: updatePathSelectionUi
     } = pathTools;
@@ -1995,7 +1995,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     MapCanvasController.bind({
       canvas, state, key, pixelToHex, pixelToWorld, worldToPixel,
       findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath,
-      recordHistory, scheduleSave, draw, handleCell, eraseFreePathsNear, selectPath,
+      recordHistory, scheduleSave, draw, handleCell, eraseFreePathsNear, selectPath, clearPathSelection,
       setTool, syncDetails, setZoom, focusSelectedName: () => els.selectedName.focus(), resizeCanvas
     });
 

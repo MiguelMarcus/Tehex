@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, recordHistory, scheduleSave, draw, handleCell, eraseFreePathsNear, selectPath, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
+  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, recordHistory, scheduleSave, draw, handleCell, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
     function pointerPos(event) {
       const rect = canvas.getBoundingClientRect();
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -107,13 +107,15 @@
       }
     });
 
-    canvas.addEventListener("pointerup", () => {
+    canvas.addEventListener("pointerup", event => {
+      const wasRightClick = event.button === 2 && state.panStart && Math.hypot(event.clientX - state.panStart.x, event.clientY - state.panStart.y) < 5;
       finishFreePath();
       state.isPainting = false;
       state.isPanning = false;
       state.panStart = null;
       state.pathDrag = null;
       state.activePathKey = null;
+      if (wasRightClick) clearPathSelection();
     });
 
     canvas.addEventListener("pointerleave", () => {

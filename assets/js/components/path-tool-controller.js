@@ -14,7 +14,7 @@
       const path = state.paths[state.selectedPathIndex];
       els.deleteSelectedPathBtn.disabled = !path;
       els.pathSelectionHint.textContent = path
-        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Clique em uma bolinha para continuar por uma ponta ou arraste o desenho para mover."
+        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Clique em uma bolinha para continuar por uma ponta, arraste para mover ou use o botão direito para deselecionar."
         : state.currentPath
           ? (state.currentPath.type === "river" ? "Continuando o rio." : "Continuando a rua.") + " Arraste para adicionar novos pontos."
           : "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar ou continuar o traço.";
@@ -81,6 +81,13 @@
       draw();
     }
 
+    function clearSelection() {
+      if (state.selectedPathIndex === null) return;
+      state.selectedPathIndex = null;
+      updateSelectionUi();
+      draw();
+    }
+
     function deleteSelectedPath() {
       if (state.selectedPathIndex === null) return;
       recordHistory();
@@ -101,7 +108,7 @@
       if (state.paths.length !== before) scheduleSave();
     }
 
-    return Object.freeze({ addFreePathPoint, deleteSelectedPath, eraseNear, findPathAt, findPathEndpointAt, finishFreePath, selectPath, startFreePath, startPathFromEndpoint, updateSelectionUi });
+    return Object.freeze({ addFreePathPoint, clearSelection, deleteSelectedPath, eraseNear, findPathAt, findPathEndpointAt, finishFreePath, selectPath, startFreePath, startPathFromEndpoint, updateSelectionUi });
   }
 
   window.PathToolController = Object.freeze({ create });
