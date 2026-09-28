@@ -36,6 +36,7 @@
       selected: null,
       lastPathCell: null,
       pathDrag: null,
+      placeDrag: null,
       activePathKey: null,
       hoveredBrush: null,
       isPainting: false,

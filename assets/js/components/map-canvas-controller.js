@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, recordHistory, scheduleSave, draw, handleCell, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
+  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
     function pointerPos(event) {
       const rect = canvas.getBoundingClientRect();
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -41,6 +41,9 @@
         const cell = pixelToHex(pos.x, pos.y);
         if (state.tool === "paint" || state.tool === "relief") state.hoveredBrush = cell;
         if (cell) state.activePathKey = key(cell.q, cell.r);
+        if (state.tool === "select" && cell && state.cells[key(cell.q, cell.r)]?.place) {
+          state.placeDrag = { source: { q: cell.q, r: cell.r }, start: pos, historyRecorded: false };
+        }
         if (cell && (state.tool === "paint" || state.tool === "place" || state.tool === "relief" || state.tool === "erase")) recordHistory();
         if (state.tool === "erase") {
           const existing = findPathAt(pos, "road");
@@ -65,6 +68,19 @@
       }
       const pos = pointerPos(event);
       const cell = pixelToHex(pos.x, pos.y);
+      if (state.placeDrag) {
+        const drag = state.placeDrag;
+        if (!cell || (cell.q === drag.source.q && cell.r === drag.source.r)) return;
+        if (Math.hypot(pos.x - drag.start.x, pos.y - drag.start.y) <= 3) return;
+        const targetKey = key(cell.q, cell.r);
+        if (state.cells[targetKey]?.place) return;
+        if (!drag.historyRecorded) {
+          recordHistory();
+          drag.historyRecorded = true;
+        }
+        if (movePlace(drag.source, cell)) drag.source = { q: cell.q, r: cell.r };
+        return;
+      }
       if (state.pathDrag) {
         const drag = state.pathDrag;
         const path = state.paths[drag.index];
@@ -114,6 +130,7 @@
       state.isPanning = false;
       state.panStart = null;
       state.pathDrag = null;
+      state.placeDrag = null;
       state.activePathKey = null;
       if (wasRightClick) clearPathSelection();
     });

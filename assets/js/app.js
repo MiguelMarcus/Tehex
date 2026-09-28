@@ -820,7 +820,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         ? "Arraste para navegar pelo mapa. Esta ferramenta não seleciona nem altera elementos."
         : tool === "relief"
           ? "Clique ou arraste para aplicar a altura escolhida aos hexes."
-        : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
+          : tool === "select"
+            ? "Clique para editar um local ou arraste-o para um hex vazio."
+          : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
       draw();
@@ -984,6 +986,21 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       updatePlaces();
       scheduleSave();
       draw();
+    }
+
+    function movePlace(source, target) {
+      if (source.q === target.q && source.r === target.r) return false;
+      const sourceCell = cellAt(source.q, source.r);
+      const targetCell = cellAt(target.q, target.r);
+      if (!sourceCell.place || targetCell.place) return false;
+      targetCell.place = sourceCell.place;
+      sourceCell.place = null;
+      state.selected = { q: target.q, r: target.r };
+      syncDetails();
+      updatePlaces();
+      scheduleSave();
+      draw();
+      return true;
     }
 
     function cellsInBrush(q, r) {
@@ -1995,7 +2012,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     MapCanvasController.bind({
       canvas, state, key, pixelToHex, pixelToWorld, worldToPixel,
       findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath,
-      recordHistory, scheduleSave, draw, handleCell, eraseFreePathsNear, selectPath, clearPathSelection,
+      recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection,
       setTool, syncDetails, setZoom, focusSelectedName: () => els.selectedName.focus(), resizeCanvas
     });
 

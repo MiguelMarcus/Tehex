@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const styleKeys = ["textScale", "labelPosition", "showLabel", "labelFont", "textColor", "labelBorder", "borderColor", "type", "iconScale", "iconPosition", "iconBackgroundEnabled", "iconBackgroundColor", "iconBorderColor"];
+  const styleKeys = ["textScale", "labelPosition", "showLabel", "labelFont", "textColor", "labelBorder", "borderColor", "iconScale", "iconPosition", "iconBackgroundEnabled", "iconBackgroundColor", "iconBorderColor"];
   const fonts = [["Georgia, serif", "Georgia"], ["Palatino Linotype, Palatino, serif", "Palatino"], ["Times New Roman, serif", "Times New Roman"]];
 
   function field(label, control) {
@@ -154,7 +154,8 @@
     applyStyle.addEventListener("click", () => {
       const saved = PlaceLabelStyleStore.list().find(item => item.id === savedStyles.value);
       if (!saved) return;
-      setValues({ ...value(), ...saved.style });
+      const { type, ...style } = saved.style || {};
+      setValues({ ...value(), ...style });
       onChange(value());
     });
     refreshStyles();
