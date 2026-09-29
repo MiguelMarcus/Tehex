@@ -22,6 +22,11 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     roadColorRow.className = "form-row";
     roadColorRow.innerHTML = '<label for="roadColor">Cor da rua</label><input id="roadColor" type="color" value="#b78b4b">';
     roadStyleRow.after(roadColorRow);
+    const roadWidthRow = document.createElement("label");
+    roadWidthRow.className = "range-row";
+    roadWidthRow.htmlFor = "roadWidth";
+    roadWidthRow.innerHTML = 'Largura: <span id="roadWidthValue">100%</span><input id="roadWidth" type="range" min="50" max="220" value="100">';
+    roadColorRow.after(roadWidthRow);
 
     const brand = document.querySelector(".brand");
     brand.querySelector(".mark + div").classList.add("brand-copy");
@@ -53,8 +58,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       };
       Object.entries(icons).forEach(([id, icon]) => addButtonIcon(id, icon));
       document.querySelectorAll("[data-tool]").forEach(button => {
-        const iconsByTool = { navigate: "arrows-move", paint: "brush", relief: "layers", place: "geo-alt", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
-        const shortcutsByTool = { navigate: "N", paint: "P", relief: "H", place: "L", road: "E", river: "I", erase: "A", select: "D" };
+        const iconsByTool = { navigate: "arrows-move", paint: "brush", relief: "layers", place: "geo-alt", text: "type", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
+        const shortcutsByTool = { navigate: "N", paint: "P", relief: "H", place: "L", text: "T", road: "E", river: "I", erase: "A", select: "D" };
         const label = button.textContent.trim();
         button.innerHTML = `<i class="bi bi-${iconsByTool[button.dataset.tool]}" aria-hidden="true"></i><span>${label}</span>`;
         button.title += ` (${shortcutsByTool[button.dataset.tool]})`;
@@ -133,6 +138,13 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       reliefLevel: document.getElementById("reliefLevel"),
       reliefLevelValue: document.getElementById("reliefLevelValue"),
       placeSection: document.getElementById("placeSection"),
+      textSection: document.getElementById("textSection"),
+      mapTextValue: document.getElementById("mapTextValue"),
+      mapTextColor: document.getElementById("mapTextColor"),
+      mapTextSize: document.getElementById("mapTextSize"),
+      mapTextSizeValue: document.getElementById("mapTextSizeValue"),
+      mapTextBackground: document.getElementById("mapTextBackground"),
+      mapTextShape: document.getElementById("mapTextShape"),
       pathAssistSection: document.getElementById("pathAssistSection"),
       roadOptionsSection: document.getElementById("roadOptionsSection"),
       riverOptionsSection: document.getElementById("riverOptionsSection"),
@@ -147,8 +159,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       placeIconScaleLabel: document.getElementById("placeIconScaleLabel"),
       roadSnapToEdges: document.getElementById("roadSnapToEdges"),
       riverSnapToEdges: document.getElementById("riverSnapToEdges"),
+      roadSelectExisting: document.getElementById("roadSelectExisting"),
+      riverSelectExisting: document.getElementById("riverSelectExisting"),
       roadStyle: document.getElementById("roadStyle"),
       roadColor: document.getElementById("roadColor"),
+      roadWidth: document.getElementById("roadWidth"),
+      roadWidthValue: document.getElementById("roadWidthValue"),
       optionsBtn: document.getElementById("optionsBtn"),
       optionsMenu: document.getElementById("optionsMenu"),
       menuNewMapBtn: document.getElementById("menuNewMapBtn"),
@@ -351,6 +367,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         drawLegacyConnections("road", range);
         drawFreePaths("road");
       }
+      drawMapTexts();
       if (state.layers.places) drawPlaces(range);
       ctx.restore();
       drawSelectedHex();
@@ -428,17 +445,19 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           if (!isOldSchool()) strokePath(path.points, "rgba(168, 220, 238, .85)", 2.2 * state.scale);
         } else {
           const style = path.style || "simple";
+          const width = Math.max(.5, Math.min(2.2, Number(path.width) || state.roadWidth || 1));
+          const color = /^#[0-9a-f]{6}$/i.test(path.color || "") ? path.color : state.roadColor;
           if (style === "trail") {
             ctx.setLineDash([2 * state.scale, 6 * state.scale]);
-            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(state.roadColor, "#382311", .45), 3 * state.scale);
+            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(color, "#382311", .45), 3 * width * state.scale);
           } else if (style === "main") {
-            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(state.roadColor, "#28170b", .6), 12 * state.scale);
-            strokePath(path.points, isOldSchool() ? "#ffffff" : state.roadColor, 7 * state.scale);
-            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(state.roadColor, "#ffffff", .62), 1.6 * state.scale);
+            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(color, "#28170b", .6), 12 * width * state.scale);
+            strokePath(path.points, isOldSchool() ? "#ffffff" : color, 7 * width * state.scale);
+            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(color, "#ffffff", .62), 1.6 * width * state.scale);
           } else {
-            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(state.roadColor, "#28170b", .55), 7 * state.scale);
-            strokePath(path.points, isOldSchool() ? "#ffffff" : state.roadColor, 3 * state.scale);
-            if (!isOldSchool()) strokePath(path.points, blendColors(state.roadColor, "#ffffff", .45), 1.6 * state.scale);
+            strokePath(path.points, isOldSchool() ? "#000000" : blendColors(color, "#28170b", .55), 7 * width * state.scale);
+            strokePath(path.points, isOldSchool() ? "#ffffff" : color, 3 * width * state.scale);
+            if (!isOldSchool()) strokePath(path.points, blendColors(color, "#ffffff", .45), 1.6 * width * state.scale);
           }
         }
         ctx.restore();
@@ -452,6 +471,41 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       } else if (state.currentPath && state.currentPath.type === type) {
         drawPathEndpoints(state.currentPath, type);
       }
+    }
+
+    function drawMapTexts() {
+      (state.texts || []).forEach(item => {
+        if (!item.text || !Array.isArray(item.point)) return;
+        const point = worldToPixel(item.point);
+        const size = Math.max(14, Math.min(56, Number(item.size) || 26)) * state.scale;
+        ctx.save();
+        ctx.font = "700 italic " + size + "px Georgia, serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const width = ctx.measureText(item.text).width + size * 1.05;
+        const height = size * 1.45;
+        if (item.background !== false) {
+          ctx.fillStyle = "rgba(255, 250, 235, .92)";
+          ctx.strokeStyle = "rgba(111, 87, 47, .5)";
+          ctx.lineWidth = Math.max(1, state.scale);
+          if (item.shape === "pill") {
+            roundRect(point.x - width / 2, point.y - height / 2, width, height, height / 2);
+          } else {
+            ctx.beginPath();
+            const skew = size * .28;
+            ctx.moveTo(point.x - width / 2 + skew, point.y - height / 2);
+            ctx.lineTo(point.x + width / 2, point.y - height / 2);
+            ctx.lineTo(point.x + width / 2 - skew, point.y + height / 2);
+            ctx.lineTo(point.x - width / 2, point.y + height / 2);
+            ctx.closePath();
+          }
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.fillStyle = item.color || "#287a45";
+        ctx.fillText(item.text, point.x, point.y);
+        ctx.restore();
+      });
     }
 
     function drawPathEndpoints(path, type) {
@@ -818,11 +872,13 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.terrainSection.hidden = tool !== "paint";
       els.reliefSection.hidden = tool !== "relief";
       els.placeSection.hidden = tool !== "place";
+      els.textSection.hidden = tool !== "text";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
       els.roadOptionsSection.hidden = tool !== "road";
       els.riverOptionsSection.hidden = tool !== "river";
       if (tool === "road") state.snapToEdges = state.roadSnapToEdges;
       if (tool === "river") state.snapToEdges = state.riverSnapToEdges;
+      state.selectExistingPaths = tool === "road" ? state.roadSelectExisting : tool === "river" ? state.riverSelectExisting : false;
       els.editLabelSection.hidden = tool !== "select";
       els.toolHint.textContent = tool === "navigate"
         ? "Arraste para navegar pelo mapa. Esta ferramenta não seleciona nem altera elementos."
@@ -830,7 +886,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           ? "Clique ou arraste para aplicar a altura escolhida aos hexes."
           : tool === "select"
             ? "Clique para editar um local ou arraste-o para um hex vazio."
-          : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
+            : tool === "text"
+              ? "Escreva um título e clique no mapa para criar um texto de região."
+            : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
       draw();
@@ -996,6 +1054,36 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       draw();
     }
 
+    function addMapText(pos) {
+      const text = els.mapTextValue.value.trim();
+      if (!text) return;
+      recordHistory();
+      state.texts.push({
+        text,
+        point: pixelToWorld(pos.x, pos.y),
+        color: els.mapTextColor.value,
+        size: Number(els.mapTextSize.value),
+        background: els.mapTextBackground.checked,
+        shape: els.mapTextShape.value
+      });
+      scheduleSave();
+      draw();
+    }
+
+    function eraseMapTextNear(pos) {
+      const index = (state.texts || []).findIndex(item => {
+        const point = worldToPixel(item.point);
+        const radius = Math.max(24, ((Number(item.size) || 26) * (item.text || "").length * .34 + 16) * state.scale);
+        return Math.hypot(pos.x - point.x, pos.y - point.y) < radius;
+      });
+      if (index === -1) return false;
+      recordHistory();
+      state.texts.splice(index, 1);
+      scheduleSave();
+      draw();
+      return true;
+    }
+
     function movePlace(source, target) {
       if (source.q === target.q && source.r === target.r) return false;
       const sourceCell = cellAt(source.q, source.r);
@@ -1025,9 +1113,20 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       return cells;
     }
 
+    function syncRoadAppearanceControls(path) {
+      const road = path?.type === "road" ? path : null;
+      els.roadColor.disabled = !road;
+      els.roadWidth.disabled = !road;
+      if (!road) return;
+      els.roadColor.value = /^#[0-9a-f]{6}$/i.test(road.color || "") ? road.color : state.roadColor;
+      const width = Math.round((Number(road.width) || state.roadWidth || 1) * 100);
+      els.roadWidth.value = width;
+      els.roadWidthValue.textContent = width + "%";
+    }
+
     const pathTools = PathToolController.create({
       state, els, pixelToWorld, snapPathPoint, worldToPixel,
-      recordHistory, scheduleSave, draw
+      recordHistory, scheduleSave, draw, onSelectionChange: syncRoadAppearanceControls
     });
     const {
       addFreePathPoint, clearSelection: clearPathSelection, deleteSelectedPath, eraseNear: eraseFreePathsNear,
@@ -1235,6 +1334,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.rows += !isColumn ? delta : 0;
       state.cells = nextCells;
       state.paths = state.paths.map(path => ({ ...path, points: path.points.map(([q, r]) => [q + shiftQ, r + shiftR]) }));
+      state.texts = (state.texts || []).map(item => ({ ...item, point: [item.point[0] + shiftQ, item.point[1] + shiftR] }));
       if (state.selected) {
         const selected = { q: state.selected.q + shiftQ, r: state.selected.r + shiftR };
         state.selected = selected.q >= 0 && selected.r >= 0 && selected.q < state.cols && selected.r < state.rows ? selected : null;
@@ -1254,8 +1354,11 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         snapToEdges: state.snapToEdges,
         roadSnapToEdges: state.roadSnapToEdges,
         riverSnapToEdges: state.riverSnapToEdges,
+        roadSelectExisting: state.roadSelectExisting,
+        riverSelectExisting: state.riverSelectExisting,
         roadStyle: state.roadStyle,
         roadColor: state.roadColor,
+        roadWidth: state.roadWidth,
         reliefLevel: state.reliefLevel,
         layers: state.layers,
         legendNotes: state.legendNotes,
@@ -1268,6 +1371,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         rows: state.rows,
         cells: state.cells,
         paths: state.paths || [],
+        texts: state.texts || [],
         savedAt: new Date().toISOString()
       };
     }
@@ -1319,13 +1423,17 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.snapToEdges = Boolean(data.snapToEdges);
       state.roadSnapToEdges = Boolean(data.roadSnapToEdges ?? data.snapToEdges);
       state.riverSnapToEdges = Boolean(data.riverSnapToEdges ?? data.snapToEdges);
+      state.roadSelectExisting = Boolean(data.roadSelectExisting);
+      state.riverSelectExisting = Boolean(data.riverSelectExisting);
       state.roadStyle = ["trail", "simple", "main"].includes(data.roadStyle) ? data.roadStyle : "simple";
       state.roadColor = /^#[0-9a-f]{6}$/i.test(data.roadColor || "") ? data.roadColor : "#b78b4b";
+      state.roadWidth = Math.max(.5, Math.min(2.2, Number(data.roadWidth) || 1));
       state.reliefLevel = Math.max(0, Math.min(3, Number(data.reliefLevel ?? 1)));
       state.layers = { ...defaultLayers(), ...(data.layers || {}) };
       state.legendNotes = typeof data.legendNotes === "string" ? data.legendNotes : "";
       if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
       if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
+      state.selectExistingPaths = state.tool === "road" ? state.roadSelectExisting : state.tool === "river" ? state.riverSelectExisting : false;
       state.brushSize = Math.max(1, Math.min(4, Number(data.brushSize) || 1));
       state.borderColor = borderColors.includes(data.borderColor) ? data.borderColor : "#77664b";
       state.terrainIconScale = Math.max(.6, Math.min(1.6, Number(data.terrainIconScale) || 1));
@@ -1335,6 +1443,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.rows = Number(data.rows) || 20;
       state.cells = data.cells || {};
       state.paths = data.paths || [];
+      state.texts = Array.isArray(data.texts) ? data.texts : [];
       state.currentPath = null;
       state.pathContinuation = null;
       state.selected = null;
@@ -1342,8 +1451,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.roadSelectExisting.checked = state.roadSelectExisting;
+      els.riverSelectExisting.checked = state.riverSelectExisting;
       els.roadStyle.value = state.roadStyle;
       els.roadColor.value = state.roadColor;
+      els.roadWidth.value = Math.round(state.roadWidth * 100);
+      els.roadWidthValue.textContent = Math.round(state.roadWidth * 100) + "%";
       els.reliefLevel.value = state.reliefLevel;
       els.reliefLevelValue.textContent = state.reliefLevel + (state.reliefLevel === 1 ? " nível" : " níveis");
       els.brushSize.value = state.brushSize;
@@ -1382,8 +1495,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.snapToEdges = false;
       state.roadSnapToEdges = false;
       state.riverSnapToEdges = false;
+      state.roadSelectExisting = false;
+      state.riverSelectExisting = false;
+      state.selectExistingPaths = false;
       state.roadStyle = "simple";
       state.roadColor = "#b78b4b";
+      state.roadWidth = 1;
       state.reliefLevel = 1;
       state.layers = defaultLayers();
       state.legendNotes = "";
@@ -1411,6 +1528,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         type: path.type === "water" ? "river" : "road",
         points: path.points.map(point => [Number(point.x) - Number(point.y) / 2, Number(point.y)])
       }));
+      state.texts = [];
       state.currentPath = null;
       state.pathContinuation = null;
       state.selected = null;
@@ -1419,8 +1537,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.roadSelectExisting.checked = false;
+      els.riverSelectExisting.checked = false;
       els.roadStyle.value = state.roadStyle;
       els.roadColor.value = state.roadColor;
+      els.roadWidth.value = "100";
+      els.roadWidthValue.textContent = "100%";
       els.reliefLevel.value = state.reliefLevel;
       els.reliefLevelValue.textContent = "1 nível";
       updateTerrainScaleControl();
@@ -1721,8 +1843,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.snapToEdges = false;
       state.roadSnapToEdges = false;
       state.riverSnapToEdges = false;
+      state.roadSelectExisting = false;
+      state.riverSelectExisting = false;
+      state.selectExistingPaths = false;
       state.roadStyle = "simple";
       state.roadColor = "#b78b4b";
+      state.roadWidth = 1;
       state.reliefLevel = 1;
       state.layers = defaultLayers();
       state.legendNotes = "";
@@ -1733,6 +1859,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.placeIconScales = {};
       state.cells = {};
       state.paths = [];
+      state.texts = [];
       state.currentPath = null;
       state.pathContinuation = null;
       for (let r = 0; r < state.rows; r++) {
@@ -1742,8 +1869,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.roadSelectExisting.checked = false;
+      els.riverSelectExisting.checked = false;
       els.roadStyle.value = state.roadStyle;
       els.roadColor.value = state.roadColor;
+      els.roadWidth.value = "100";
+      els.roadWidthValue.textContent = "100%";
       els.reliefLevel.value = state.reliefLevel;
       els.reliefLevelValue.textContent = "1 nível";
       updateTerrainScaleControl();
@@ -1775,6 +1906,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         placeIconScales: { ...state.placeIconScales },
         roadStyle: state.roadStyle,
         roadColor: state.roadColor,
+        roadWidth: state.roadWidth,
         roadSnapToEdges: state.roadSnapToEdges,
         riverSnapToEdges: state.riverSnapToEdges,
         reliefLevel: state.reliefLevel
@@ -1789,6 +1921,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.placeIconScales = { ...(settings.placeIconScales || {}) };
       state.roadStyle = ["trail", "simple", "main"].includes(settings.roadStyle) ? settings.roadStyle : "simple";
       state.roadColor = /^#[0-9a-f]{6}$/i.test(settings.roadColor || "") ? settings.roadColor : "#b78b4b";
+      state.roadWidth = Math.max(.5, Math.min(2.2, Number(settings.roadWidth) || 1));
       state.roadSnapToEdges = Boolean(settings.roadSnapToEdges);
       state.riverSnapToEdges = Boolean(settings.riverSnapToEdges);
       if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
@@ -1796,6 +1929,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.reliefLevel = Math.max(0, Math.min(3, Number(settings.reliefLevel ?? 1)));
       els.roadStyle.value = state.roadStyle;
       els.roadColor.value = state.roadColor;
+      els.roadWidth.value = Math.round(state.roadWidth * 100);
+      els.roadWidthValue.textContent = Math.round(state.roadWidth * 100) + "%";
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
       els.reliefLevel.value = state.reliefLevel;
@@ -1857,7 +1992,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       }
       if (document.querySelector(".modal:not([hidden])")) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
-      const tool = { n: "navigate", p: "paint", h: "relief", l: "place", e: "road", i: "river", a: "erase", d: "select" }[event.key.toLowerCase()];
+      const tool = { n: "navigate", p: "paint", h: "relief", l: "place", t: "text", e: "road", i: "river", a: "erase", d: "select" }[event.key.toLowerCase()];
       if (!tool) return;
       event.preventDefault();
       setTool(tool);
@@ -1872,6 +2007,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       setTerrain("grass");
       updatePlacePreview();
       updatePathSelectionUi();
+      syncRoadAppearanceControls();
       els.paintShowIcon.addEventListener("change", () => { state.paintShowIcon = els.paintShowIcon.checked; });
       els.reliefLevel.addEventListener("input", () => {
         state.reliefLevel = Number(els.reliefLevel.value);
@@ -1909,14 +2045,43 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
         scheduleSave();
       });
+      els.roadSelectExisting.addEventListener("change", () => {
+        state.roadSelectExisting = els.roadSelectExisting.checked;
+        if (state.tool === "road") state.selectExistingPaths = state.roadSelectExisting;
+        if (!state.roadSelectExisting) clearPathSelection();
+        updatePathSelectionUi();
+        scheduleSave();
+      });
+      els.riverSelectExisting.addEventListener("change", () => {
+        state.riverSelectExisting = els.riverSelectExisting.checked;
+        if (state.tool === "river") state.selectExistingPaths = state.riverSelectExisting;
+        if (!state.riverSelectExisting) clearPathSelection();
+        updatePathSelectionUi();
+        scheduleSave();
+      });
       els.roadStyle.addEventListener("change", () => {
         state.roadStyle = els.roadStyle.value;
         scheduleSave();
       });
       els.roadColor.addEventListener("input", () => {
-        state.roadColor = els.roadColor.value;
+        const path = state.paths[state.selectedPathIndex];
+        if (!path || path.type !== "road") return;
+        recordHistory();
+        path.color = els.roadColor.value;
         scheduleSave();
         draw();
+      });
+      els.roadWidth.addEventListener("input", () => {
+        const path = state.paths[state.selectedPathIndex];
+        if (!path || path.type !== "road") return;
+        recordHistory();
+        path.width = Number(els.roadWidth.value) / 100;
+        els.roadWidthValue.textContent = els.roadWidth.value + "%";
+        scheduleSave();
+        draw();
+      });
+      els.mapTextSize.addEventListener("input", () => {
+        els.mapTextSizeValue.textContent = els.mapTextSize.value + " px";
       });
       els.deleteSelectedPathBtn.addEventListener("click", deleteSelectedPath);
       els.undoBtn.addEventListener("click", undo);
@@ -2037,7 +2202,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     MapCanvasController.bind({
       canvas, state, key, pixelToHex, pixelToWorld, worldToPixel,
-      findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath,
+      findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, addMapText, eraseMapTextNear,
       recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection,
       setTool, syncDetails, setZoom, focusSelectedName: () => els.selectedName.focus(), resizeCanvas
     });

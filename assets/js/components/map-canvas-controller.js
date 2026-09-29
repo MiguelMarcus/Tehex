@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
+  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, addMapText, eraseMapTextNear, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
     function pointerPos(event) {
       const rect = canvas.getBoundingClientRect();
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -31,19 +31,26 @@
           return;
         }
       }
+      if (state.tool === "text") {
+        addMapText(pos);
+        state.isPainting = false;
+        return;
+      }
       if (state.tool === "road" || state.tool === "river") {
-        const endpoint = findPathEndpointAt(pos, state.tool);
-        if (endpoint) {
-          state.isPainting = true;
-          startPathFromEndpoint(endpoint.index, endpoint.endpointIndex);
-          return;
-        }
-        const existing = findPathAt(pos, state.tool);
-        if (existing !== -1) {
-          selectPath(existing);
-          state.isPainting = true;
-          state.pathDrag = { index: existing, start: pos, moved: false, historyRecorded: false };
-          return;
+        if (state.selectExistingPaths) {
+          const endpoint = findPathEndpointAt(pos, state.tool);
+          if (endpoint) {
+            state.isPainting = true;
+            startPathFromEndpoint(endpoint.index, endpoint.endpointIndex);
+            return;
+          }
+          const existing = findPathAt(pos, state.tool);
+          if (existing !== -1) {
+            selectPath(existing);
+            state.isPainting = true;
+            state.pathDrag = { index: existing, start: pos, moved: false, historyRecorded: false };
+            return;
+          }
         }
         startFreePath(pos);
       } else {
@@ -55,6 +62,10 @@
         }
         if (cell && (state.tool === "paint" || state.tool === "place" || state.tool === "relief" || state.tool === "erase")) recordHistory();
         if (state.tool === "erase") {
+          if (eraseMapTextNear(pos)) {
+            state.isPainting = false;
+            return;
+          }
           const existing = findPathAt(pos, "road");
           const river = existing === -1 ? findPathAt(pos, "river") : -1;
           if (existing !== -1 || river !== -1) {

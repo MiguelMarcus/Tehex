@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  function create({ state, els, pixelToWorld, snapPathPoint, worldToPixel, recordHistory, scheduleSave, draw }) {
+  function create({ state, els, pixelToWorld, snapPathPoint, worldToPixel, recordHistory, scheduleSave, draw, onSelectionChange }) {
     function findPathAt(pos, type) {
       return MapPathGeometry.findPathAt(state.paths || [], pos, type, worldToPixel, Math.max(10, state.hexSize * state.scale * .34));
     }
@@ -13,11 +13,14 @@
     function updateSelectionUi() {
       const path = state.paths[state.selectedPathIndex];
       els.deleteSelectedPathBtn.disabled = !path;
+      onSelectionChange?.(path);
       els.pathSelectionHint.textContent = path
         ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Arraste-o para mover. Puxe uma bolinha na direção do traço para encurtá-lo, ou para fora para continuar."
         : state.currentPath
           ? (state.currentPath.type === "river" ? "Continuando o rio." : "Continuando a rua.") + " Arraste para adicionar novos pontos."
-          : "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar ou continuar o traço.";
+          : state.selectExistingPaths
+            ? "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar um novo traço."
+            : "Modo de desenho ativo. Marque “Selecionar” para editar um traçado existente.";
     }
 
     function startFreePath(pos) {
@@ -34,7 +37,15 @@
         state.pathContinuation = null;
       } else {
         recordHistory();
-        state.currentPath = { type: state.tool, style: state.tool === "road" ? state.roadStyle : undefined, snapToEdges: state.snapToEdges, snapToCenters: !state.snapToEdges, points: [point] };
+        state.currentPath = {
+          type: state.tool,
+          style: state.tool === "road" ? state.roadStyle : undefined,
+          color: state.tool === "road" ? state.roadColor : undefined,
+          width: state.tool === "road" ? state.roadWidth : undefined,
+          snapToEdges: state.snapToEdges,
+          snapToCenters: !state.snapToEdges,
+          points: [point]
+        };
         state.pathContinuation = null;
       }
       updateSelectionUi();
