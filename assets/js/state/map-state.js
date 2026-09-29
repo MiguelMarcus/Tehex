@@ -39,6 +39,7 @@
       texts: [],
       selectedTextIndex: null,
       textDrag: null,
+      clipboard: null,
       currentPath: null,
       pathContinuation: null,
       selectedPathIndex: null,

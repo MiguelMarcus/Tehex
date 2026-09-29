@@ -59,7 +59,7 @@
   function draw(ctx, { state, worldToPixel }) {
     (state.texts || []).forEach((item, index) => {
       if (!item.text || !Array.isArray(item.point)) return;
-      const point = worldToPixel(item.point), size = Math.max(14, Math.min(56, Number(item.size) || 26)) * state.scale;
+      const point = worldToPixel(item.point), size = Math.max(6, Math.min(56, Number(item.size) || 26)) * state.scale;
       const { mask, textWidth, textHeight } = maskFor(item.text, item, size);
       const padding = (Number(item.outline) || 0) + (Number(item.glow) || 0) * .5;
       const width = textWidth + size * 1.05 + padding * 2, height = textHeight + padding * 2;
@@ -78,7 +78,7 @@
         ctx.fill(); ctx.stroke();
       }
       drawEffects(ctx, mask, spriteX, spriteY, item);
-      if (state.tool === "text" && state.selectedTextIndex === index) {
+      if (!state.isExporting && state.tool === "text" && state.selectedTextIndex === index) {
         ctx.setLineDash([5, 4]); ctx.strokeStyle = "#1f6e69"; ctx.lineWidth = 1.5 * state.scale;
         ctx.strokeRect(left - 5, point.y - height / 2 - 5, width + 10, height + 10);
       }

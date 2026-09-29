@@ -34,11 +34,11 @@
 
     const scale = document.createElement("input");
     scale.type = "range";
-    scale.min = "60";
+    scale.min = "25";
     scale.max = "300";
     const scaleNumber = document.createElement("input");
     scaleNumber.type = "number";
-    scaleNumber.min = "60";
+    scaleNumber.min = "25";
     scaleNumber.max = "300";
     scaleNumber.step = "1";
     const scaleWrap = document.createElement("div");
@@ -108,9 +108,9 @@
       return { name: name.value, textScale: Number(scale.value) / 100, labelPosition: position.value, showLabel: visible.checked, labelFont: font.value, textColor: textColor.value, labelBorder: borderEnabled.checked, borderColor: borderColor.value, type: icon.value, iconScale: Number(iconScale.value) / 100, iconPosition: iconPosition.value, iconBackgroundEnabled: iconBackgroundEnabled.checked, iconBackgroundColor: iconBackgroundColor.value, iconBorderColor: iconBorderColor.value };
     }
 
-    function syncSize(source, target, max) {
+    function syncSize(source, target, max, min = 60) {
       source.addEventListener("input", () => {
-        const next = Math.max(60, Math.min(max, Number(source.value) || 60));
+        const next = Math.max(min, Math.min(max, Number(source.value) || min));
         source.value = next;
         target.value = next;
         onChange(value());
@@ -119,8 +119,8 @@
 
     setValues(place);
     [name, position, font, icon, iconPosition, textColor, borderColor, iconBackgroundColor, iconBorderColor, iconBackgroundEnabled, borderEnabled, visible].forEach(control => control.addEventListener(control.type === "checkbox" || control.tagName === "SELECT" ? "change" : "input", () => onChange(value())));
-    syncSize(scale, scaleNumber, 300);
-    syncSize(scaleNumber, scale, 300);
+    syncSize(scale, scaleNumber, 300, 25);
+    syncSize(scaleNumber, scale, 300, 25);
     syncSize(iconScale, iconNumber, 180);
     syncSize(iconNumber, iconScale, 180);
 

@@ -26,7 +26,7 @@
     });
 
     const layers = layerOptions.map(([id, label]) => `<label class="feature-check"><input type="checkbox" data-layer="${id}"><span>${label}</span></label>`).join("");
-    const shortcuts = [["N", "Navegar"], ["P", "Pintar"], ["H", "Relevo"], ["L", "Lugar"], ["T", "Texto"], ["E", "Rua/estrada"], ["I", "Rio"], ["A", "Apagar"], ["D", "Editar"], ["Ctrl/⌘ + Z", "Desfazer"], ["Ctrl/⌘ + Shift + Z", "Refazer"], ["F1 ou ?", "Abrir esta ajuda"], ["Esc", "Fechar janela"]]
+    const shortcuts = [["N", "Navegar"], ["P", "Pintar"], ["H", "Relevo"], ["L", "Lugar"], ["T", "Texto"], ["E", "Rua/estrada"], ["I", "Rio"], ["A", "Apagar"], ["D", "Editar"], ["Ctrl/⌘ + C / V", "Copiar/colar local ou texto"], ["Ctrl/⌘ + Z", "Desfazer"], ["Ctrl/⌘ + Shift + Z", "Refazer"], ["F1 ou ?", "Abrir esta ajuda"], ["Esc", "Fechar janela"]]
       .map(([key, action]) => `<div class="shortcut-row"><kbd>${key}</kbd><span>${action}</span></div>`).join("");
     const html = [
       modal("layersModal", "Camadas visuais", `<p class="hint">Escolha o que aparece no mapa e nas exportações.</p><div class="feature-check-grid">${layers}</div>`),

@@ -83,8 +83,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     const textScaleRow = document.createElement("label");
     textScaleRow.className = "range-row text-size-control";
     textScaleRow.htmlFor = "selectedTextScale";
-    textScaleRow.innerHTML = 'Tamanho do texto: <span id="selectedTextScaleValue">100%</span><input id="selectedTextScale" type="range" min="60" max="300" value="100">';
+    textScaleRow.innerHTML = 'Tamanho do texto: <span id="selectedTextScaleValue">100%</span><input id="selectedTextScale" type="range" min="25" max="300" value="100">';
     document.getElementById("selectedName").closest(".form-row").after(textScaleRow);
+    document.getElementById("mapTextSize").min = "6";
 
     function addPercentInput(rangeId) {
       const range = document.getElementById(rangeId);
@@ -817,8 +818,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         if (!cell.place || !cell.place.name) return;
         const p = hexToPixel(q, r);
         const text = cell.place.name;
-        const textScale = Math.max(.6, Math.min(3, Number(cell.place.textScale) || 1));
-        const fontSize = Math.max(12, Math.min(96, 24 * state.scale * textScale));
+        const textScale = Math.max(.25, Math.min(3, Number(cell.place.textScale) || 1));
+        const fontSize = Math.max(6, Math.min(96, 24 * state.scale * textScale));
         if (cell.place.showLabel === false) return;
         const isAbove = cell.place.labelPosition === "top";
         const y = isAbove ? p.y - state.hexSize * state.scale * .58 : p.y + state.hexSize * state.scale * .18;
@@ -902,9 +903,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         : tool === "relief"
           ? "Clique ou arraste para aplicar a altura escolhida aos hexes."
           : tool === "select"
-            ? "Clique para editar um local ou arraste-o para um hex vazio."
+            ? "Clique para editar ou arraste um local. Ctrl/Cmd+C copia; selecione um hex vazio e use Ctrl/Cmd+V."
             : tool === "text"
-              ? "Escreva um título e clique no mapa para criar um texto de região."
+              ? "Escreva um título e clique no mapa para criar um texto. Ctrl/Cmd+C copia; Ctrl/Cmd+V duplica."
             : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
@@ -2012,6 +2013,47 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       setTool(tool);
     }
 
+    function copyOrPasteMapElement(event) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (event.target.matches("input, textarea, select") || event.target.isContentEditable) return;
+      const command = event.key.toLowerCase();
+      if (command === "c") {
+        if (state.tool === "text" && state.selectedTextIndex !== null) {
+          const text = state.texts[state.selectedTextIndex];
+          if (!text) return;
+          state.clipboard = { type: "text", value: JSON.parse(JSON.stringify(text)) };
+        } else if (state.tool === "select" && state.selected) {
+          const cell = cellAt(state.selected.q, state.selected.r);
+          if (!cell.place) return;
+          state.clipboard = { type: "place", value: JSON.parse(JSON.stringify(cell.place)) };
+        } else return;
+        event.preventDefault();
+        return;
+      }
+      if (command !== "v" || !state.clipboard) return;
+      if (state.clipboard.type === "text" && state.tool === "text") {
+        event.preventDefault();
+        recordHistory();
+        const value = JSON.parse(JSON.stringify(state.clipboard.value));
+        value.point = [value.point[0] + .55, value.point[1] + .55];
+        state.texts.push(value);
+        state.selectedTextIndex = state.texts.length - 1;
+        syncTextControls();
+        scheduleSave();
+        draw();
+      } else if (state.clipboard.type === "place" && state.tool === "select" && state.selected) {
+        const cell = cellAt(state.selected.q, state.selected.r);
+        if (cell.place) return;
+        event.preventDefault();
+        recordHistory();
+        cell.place = JSON.parse(JSON.stringify(state.clipboard.value));
+        syncDetails();
+        updatePlaces();
+        scheduleSave();
+        draw();
+      }
+    }
+
     function initControls() {
       els.toggleRightPanelBtn.innerHTML = '<i class="bi bi-chevron-right" aria-hidden="true"></i>';
       makeSectionsCollapsible();
@@ -2220,6 +2262,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.zoomOut.addEventListener("click", () => setZoom(state.scale - .15));
       els.centerBtn.addEventListener("click", centerMap);
       document.addEventListener("keydown", handleToolShortcut);
+      document.addEventListener("keydown", copyOrPasteMapElement);
           document.addEventListener("keydown", event => {
             if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
             if (event.target.matches("input, textarea, select") || event.target.isContentEditable) return;
