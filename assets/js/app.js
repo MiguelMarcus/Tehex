@@ -32,6 +32,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     textStyleOptions.innerHTML = '<div class="form-row"><label for="mapTextPreset">Preset</label><select id="mapTextPreset"><option value="region">Região</option><option value="city">Cidade</option><option value="subtle">Discreto</option></select></div><div class="form-row"><label for="mapTextBackgroundColor">Fundo</label><input id="mapTextBackgroundColor" type="color" value="#fff4d6"></div><div class="form-row"><label for="mapTextBorderColor">Borda</label><input id="mapTextBorderColor" type="color" value="#6f572f"></div><div class="form-row"><label for="mapTextFont">Fonte</label><select id="mapTextFont"><option value="Georgia, serif">Georgia</option><option value="Palatino Linotype, Palatino, serif">Palatino</option><option value="Times New Roman, serif">Times New Roman</option></select></div><label class="range-row" for="mapTextOutline">Contorno: <span id="mapTextOutlineValue">0 px</span><input id="mapTextOutline" type="range" min="0" max="8" value="0"></label><div class="form-row"><label for="mapTextOutlineColor">Cor do contorno</label><input id="mapTextOutlineColor" type="color" value="#fff9f0"></div><label class="range-row" for="mapTextGlow">Brilho: <span id="mapTextGlowValue">0 px</span><input id="mapTextGlow" type="range" min="0" max="16" value="0"></label><div class="form-row"><label for="mapTextGlowColor">Cor do brilho</label><input id="mapTextGlowColor" type="color" value="#ffffff"></div><div class="form-row"><label for="mapTextAlign">Alinhamento</label><select id="mapTextAlign"><option value="left">Esquerda</option><option value="center" selected>Centro</option><option value="right">Direita</option></select></div><label class="range-row" for="mapTextCurvature">Curvatura: <span id="mapTextCurvatureValue">0</span><input id="mapTextCurvature" type="range" min="-40" max="40" value="0"></label><label class="range-row" for="mapTextLetterSpacing">Espaçamento: <span id="mapTextLetterSpacingValue">0 px</span><input id="mapTextLetterSpacing" type="range" min="-4" max="16" value="0"></label><div class="toggle-row"><input id="mapTextSharp" type="checkbox"><label for="mapTextSharp">Nitidez de fonte</label></div><button id="deleteSelectedTextBtn" type="button" disabled>Excluir texto selecionado</button>';
     document.getElementById("textSection").querySelector(".hint").before(textStyleOptions);
     document.getElementById("mapTextShape").appendChild(new Option("Placa retangular", "rectangle"));
+    document.getElementById("mapTextSharp").closest(".toggle-row").remove();
 
     const brand = document.querySelector(".brand");
     brand.querySelector(".mark + div").classList.add("brand-copy");
@@ -414,10 +415,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         drawLegacyConnections("road", range);
         drawFreePaths("road");
       }
-      drawMapTexts();
       if (state.layers.places) drawPlaces(range);
       ctx.restore();
       drawSelectedHex();
+      drawMapTexts();
       drawBrushPreview();
       if (state.layers.labels) drawPlaceLabels(range);
       if (state.layers.coordinates) drawCoordinates(range);
@@ -2100,7 +2101,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       [els.mapTextValue, els.mapTextColor, els.mapTextBackground, els.mapTextShape, els.mapTextBackgroundColor, els.mapTextBorderColor, els.mapTextFont].forEach(control => {
         control.addEventListener(control.type === "text" ? "input" : "change", updateSelectedMapText);
       });
-      [els.mapTextOutline, els.mapTextOutlineColor, els.mapTextGlow, els.mapTextGlowColor, els.mapTextAlign, els.mapTextCurvature, els.mapTextLetterSpacing, els.mapTextSharp].forEach(control => {
+      [els.mapTextOutline, els.mapTextOutlineColor, els.mapTextGlow, els.mapTextGlowColor, els.mapTextAlign, els.mapTextCurvature, els.mapTextLetterSpacing].forEach(control => {
         control.addEventListener(control.type === "range" ? "input" : "change", () => {
           els.mapTextOutlineValue.textContent = els.mapTextOutline.value + " px";
           els.mapTextGlowValue.textContent = els.mapTextGlow.value + " px";

@@ -26,7 +26,6 @@
       els.mapTextCurvatureValue.textContent = item.curvature || "0";
       els.mapTextLetterSpacing.value = item.letterSpacing || 0;
       els.mapTextLetterSpacingValue.textContent = (item.letterSpacing || 0) + " px";
-      els.mapTextSharp.checked = Boolean(item.sharp);
     }
 
     function findAt(pos) {
@@ -76,7 +75,7 @@
       item.outline = Number(els.mapTextOutline.value); item.outlineColor = els.mapTextOutlineColor.value;
       item.glow = Number(els.mapTextGlow.value); item.glowColor = els.mapTextGlowColor.value;
       item.align = els.mapTextAlign.value; item.curvature = Number(els.mapTextCurvature.value);
-      item.letterSpacing = Number(els.mapTextLetterSpacing.value); item.sharp = els.mapTextSharp.checked;
+      item.letterSpacing = Number(els.mapTextLetterSpacing.value);
       scheduleSave(); draw();
     }
 
