@@ -22,6 +22,15 @@
       }
       state.isPainting = true;
       state.activePathKey = null;
+      if (state.tool === "select") {
+        const road = findPathAt(pos, "road");
+        const river = road === -1 ? findPathAt(pos, "river") : -1;
+        if (road !== -1 || river !== -1) {
+          selectPath(road !== -1 ? road : river);
+          state.isPainting = false;
+          return;
+        }
+      }
       if (state.tool === "road" || state.tool === "river") {
         const endpoint = findPathEndpointAt(pos, state.tool);
         if (endpoint) {
@@ -50,7 +59,7 @@
           const river = existing === -1 ? findPathAt(pos, "river") : -1;
           if (existing !== -1 || river !== -1) {
             state.isPainting = false;
-            selectPath(existing !== -1 ? existing : river);
+            eraseFreePathsNear(pos);
             return;
           }
           eraseFreePathsNear(pos);

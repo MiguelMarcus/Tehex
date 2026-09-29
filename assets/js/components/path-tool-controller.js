@@ -14,7 +14,7 @@
       const path = state.paths[state.selectedPathIndex];
       els.deleteSelectedPathBtn.disabled = !path;
       els.pathSelectionHint.textContent = path
-        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Clique em uma bolinha para continuar por uma ponta, arraste para mover ou use o botão direito para deselecionar."
+        ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Arraste-o para mover. Puxe uma bolinha na direção do traço para encurtá-lo, ou para fora para continuar."
         : state.currentPath
           ? (state.currentPath.type === "river" ? "Continuando o rio." : "Continuando a rua.") + " Arraste para adicionar novos pontos."
           : "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar ou continuar o traço.";
@@ -31,9 +31,11 @@
         state.selectedPathIndex = null;
         const last = state.currentPath.points[state.currentPath.points.length - 1];
         if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
+        state.pathContinuation = null;
       } else {
         recordHistory();
         state.currentPath = { type: state.tool, style: state.tool === "road" ? state.roadStyle : undefined, snapToEdges: state.snapToEdges, snapToCenters: !state.snapToEdges, points: [point] };
+        state.pathContinuation = null;
       }
       updateSelectionUi();
       draw();
@@ -45,6 +47,28 @@
       const point = pixelToWorld(snapped.x, snapped.y);
       const points = state.currentPath.points;
       const last = points[points.length - 1];
+      if (state.pathContinuation && points.length > 1) {
+        const previous = points[points.length - 2];
+        const moved = [point[0] - last[0], point[1] - last[1]];
+        const towardPath = [previous[0] - last[0], previous[1] - last[1]];
+        if (moved[0] * towardPath[0] + moved[1] * towardPath[1] > 0) {
+          let nearestIndex = points.length - 2;
+          let nearestDistance = Infinity;
+          points.slice(0, -1).forEach((candidate, index) => {
+            const distance = Math.hypot(point[0] - candidate[0], point[1] - candidate[1]);
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearestIndex = index;
+            }
+          });
+          recordHistory();
+          if (nearestDistance < .45) points.splice(nearestIndex + 1);
+          else points.pop();
+          scheduleSave();
+          draw();
+          return;
+        }
+      }
       if (Math.hypot(point[0] - last[0], point[1] - last[1]) < .16) return;
       recordHistory();
       points.push(point);
@@ -60,6 +84,7 @@
         scheduleSave();
       }
       state.currentPath = null;
+      state.pathContinuation = null;
       updateSelectionUi();
       draw();
     }
@@ -69,6 +94,7 @@
       const path = state.paths.splice(index, 1)[0];
       if (endpointIndex === 0) path.points.reverse();
       state.currentPath = path;
+      state.pathContinuation = true;
       state.selectedPathIndex = null;
       state.pathDrag = null;
       updateSelectionUi();
