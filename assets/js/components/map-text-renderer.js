@@ -15,6 +15,32 @@
     ctx.closePath();
   }
 
+  function drawLabel(ctx, text, x, y, item) {
+    const spacing = Number(item.letterSpacing) || 0;
+    const curvature = Number(item.curvature) || 0;
+    const outline = Number(item.outline) || 0;
+    ctx.shadowColor = item.glowColor || "#ffffff";
+    ctx.shadowBlur = Number(item.glow) || 0;
+    if (!spacing && !curvature) {
+      if (outline) { ctx.lineWidth = outline * 2; ctx.strokeStyle = item.outlineColor || "#fff9f0"; ctx.strokeText(text, x, y); }
+      ctx.fillText(text, x, y);
+      return;
+    }
+    const widths = [...text].map(char => ctx.measureText(char).width + spacing);
+    const total = widths.reduce((sum, width) => sum + width, 0) - spacing;
+    const origin = item.align === "left" ? x : item.align === "right" ? x - total : x - total / 2;
+    ctx.textAlign = "left";
+    let cursor = origin;
+    [...text].forEach((char, index) => {
+      const width = widths[index] - spacing;
+      const progress = total ? (cursor + width / 2 - origin) / total - .5 : 0;
+      const yy = y + curvature * (progress * progress - .25);
+      if (outline) { ctx.lineWidth = outline * 2; ctx.strokeStyle = item.outlineColor || "#fff9f0"; ctx.strokeText(char, cursor, yy); }
+      ctx.fillText(char, cursor, yy);
+      cursor += width + spacing;
+    });
+  }
+
   function draw(ctx, { state, worldToPixel }) {
     (state.texts || []).forEach((item, index) => {
       if (!item.text || !Array.isArray(item.point)) return;
@@ -22,7 +48,7 @@
       const size = Math.max(14, Math.min(56, Number(item.size) || 26)) * state.scale;
       ctx.save();
       ctx.font = "700 italic " + size + "px " + (item.font || "Georgia, serif");
-      ctx.textAlign = "center";
+      ctx.textAlign = item.align || "center";
       ctx.textBaseline = "middle";
       const width = ctx.measureText(item.text).width + size * 1.05;
       const height = size * 1.45;
@@ -48,7 +74,7 @@
         ctx.stroke();
       }
       ctx.fillStyle = item.color || "#287a45";
-      ctx.fillText(item.text, point.x, point.y);
+      drawLabel(ctx, item.text, point.x, point.y, item);
       if (state.tool === "text" && state.selectedTextIndex === index) {
         ctx.setLineDash([5, 4]);
         ctx.strokeStyle = "#1f6e69";

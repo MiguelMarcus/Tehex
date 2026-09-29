@@ -15,6 +15,18 @@
       els.mapTextBackgroundColor.value = item.backgroundColor || "#fff4d6";
       els.mapTextBorderColor.value = item.borderColor || "#6f572f";
       els.mapTextFont.value = item.font || "Georgia, serif";
+      els.mapTextOutline.value = item.outline || 0;
+      els.mapTextOutlineValue.textContent = (item.outline || 0) + " px";
+      els.mapTextOutlineColor.value = item.outlineColor || "#fff9f0";
+      els.mapTextGlow.value = item.glow || 0;
+      els.mapTextGlowValue.textContent = (item.glow || 0) + " px";
+      els.mapTextGlowColor.value = item.glowColor || "#ffffff";
+      els.mapTextAlign.value = item.align || "center";
+      els.mapTextCurvature.value = item.curvature || 0;
+      els.mapTextCurvatureValue.textContent = item.curvature || "0";
+      els.mapTextLetterSpacing.value = item.letterSpacing || 0;
+      els.mapTextLetterSpacingValue.textContent = (item.letterSpacing || 0) + " px";
+      els.mapTextSharp.checked = Boolean(item.sharp);
     }
 
     function findAt(pos) {
@@ -61,7 +73,31 @@
       item.color = els.mapTextColor.value; item.size = Number(els.mapTextSize.value);
       item.background = els.mapTextBackground.checked; item.shape = els.mapTextShape.value;
       item.backgroundColor = els.mapTextBackgroundColor.value; item.borderColor = els.mapTextBorderColor.value; item.font = els.mapTextFont.value;
+      item.outline = Number(els.mapTextOutline.value); item.outlineColor = els.mapTextOutlineColor.value;
+      item.glow = Number(els.mapTextGlow.value); item.glowColor = els.mapTextGlowColor.value;
+      item.align = els.mapTextAlign.value; item.curvature = Number(els.mapTextCurvature.value);
+      item.letterSpacing = Number(els.mapTextLetterSpacing.value); item.sharp = els.mapTextSharp.checked;
       scheduleSave(); draw();
+    }
+
+    function applyPreset(id) {
+      const presets = {
+        region: { size: 30, color: "#287a45", font: "Georgia, serif", background: true, shape: "banner", outline: 0, glow: 0, align: "center", curvature: 0, letterSpacing: 0 },
+        city: { size: 22, color: "#3b2318", font: "Palatino Linotype, Palatino, serif", background: true, shape: "pill", outline: 1, glow: 0, align: "center", curvature: 0, letterSpacing: 1 },
+        subtle: { size: 18, color: "#3b2318", font: "Times New Roman, serif", background: false, shape: "rectangle", outline: 1, glow: 0, align: "center", curvature: 0, letterSpacing: 0 }
+      };
+      const preset = presets[id];
+      if (!preset) return;
+      els.mapTextSize.value = preset.size; els.mapTextColor.value = preset.color; els.mapTextFont.value = preset.font;
+      els.mapTextBackground.checked = preset.background; els.mapTextShape.value = preset.shape;
+      els.mapTextOutline.value = preset.outline; els.mapTextGlow.value = preset.glow;
+      els.mapTextAlign.value = preset.align; els.mapTextCurvature.value = preset.curvature; els.mapTextLetterSpacing.value = preset.letterSpacing;
+      els.mapTextSizeValue.textContent = preset.size + " px";
+      els.mapTextOutlineValue.textContent = preset.outline + " px";
+      els.mapTextGlowValue.textContent = preset.glow + " px";
+      els.mapTextCurvatureValue.textContent = preset.curvature;
+      els.mapTextLetterSpacingValue.textContent = preset.letterSpacing + " px";
+      updateSelected();
     }
 
     function eraseNear(pos) {
@@ -77,7 +113,7 @@
       syncControls(); scheduleSave(); draw();
     }
 
-    return Object.freeze({ beginInteraction, deleteSelected, eraseNear, move, syncControls, updateSelected });
+    return Object.freeze({ applyPreset, beginInteraction, deleteSelected, eraseNear, move, syncControls, updateSelected });
   }
 
   window.MapTextToolController = Object.freeze({ create });
