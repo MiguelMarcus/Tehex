@@ -27,6 +27,11 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     roadWidthRow.htmlFor = "roadWidth";
     roadWidthRow.innerHTML = 'Largura: <span id="roadWidthValue">100%</span><input id="roadWidth" type="range" min="50" max="220" value="100">';
     roadColorRow.after(roadWidthRow);
+    const textStyleOptions = document.createElement("div");
+    textStyleOptions.className = "feature-form-grid";
+    textStyleOptions.innerHTML = '<div class="form-row"><label for="mapTextBackgroundColor">Fundo</label><input id="mapTextBackgroundColor" type="color" value="#fff4d6"></div><div class="form-row"><label for="mapTextBorderColor">Borda</label><input id="mapTextBorderColor" type="color" value="#6f572f"></div><div class="form-row"><label for="mapTextFont">Fonte</label><select id="mapTextFont"><option value="Georgia, serif">Clássica</option><option value="Arial, sans-serif">Sem serifa</option><option value="cursive">Manuscrita</option></select></div><button id="deleteSelectedTextBtn" type="button" disabled>Excluir texto selecionado</button>';
+    document.getElementById("textSection").querySelector(".hint").before(textStyleOptions);
+    document.getElementById("mapTextShape").appendChild(new Option("Placa retangular", "rectangle"));
 
     const brand = document.querySelector(".brand");
     brand.querySelector(".mark + div").classList.add("brand-copy");
@@ -145,6 +150,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       mapTextSizeValue: document.getElementById("mapTextSizeValue"),
       mapTextBackground: document.getElementById("mapTextBackground"),
       mapTextShape: document.getElementById("mapTextShape"),
+      mapTextBackgroundColor: document.getElementById("mapTextBackgroundColor"),
+      mapTextBorderColor: document.getElementById("mapTextBorderColor"),
+      mapTextFont: document.getElementById("mapTextFont"),
+      deleteSelectedTextBtn: document.getElementById("deleteSelectedTextBtn"),
       pathAssistSection: document.getElementById("pathAssistSection"),
       roadOptionsSection: document.getElementById("roadOptionsSection"),
       riverOptionsSection: document.getElementById("riverOptionsSection"),
@@ -474,38 +483,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     }
 
     function drawMapTexts() {
-      (state.texts || []).forEach(item => {
-        if (!item.text || !Array.isArray(item.point)) return;
-        const point = worldToPixel(item.point);
-        const size = Math.max(14, Math.min(56, Number(item.size) || 26)) * state.scale;
-        ctx.save();
-        ctx.font = "700 italic " + size + "px Georgia, serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const width = ctx.measureText(item.text).width + size * 1.05;
-        const height = size * 1.45;
-        if (item.background !== false) {
-          ctx.fillStyle = "rgba(255, 250, 235, .92)";
-          ctx.strokeStyle = "rgba(111, 87, 47, .5)";
-          ctx.lineWidth = Math.max(1, state.scale);
-          if (item.shape === "pill") {
-            roundRect(point.x - width / 2, point.y - height / 2, width, height, height / 2);
-          } else {
-            ctx.beginPath();
-            const skew = size * .28;
-            ctx.moveTo(point.x - width / 2 + skew, point.y - height / 2);
-            ctx.lineTo(point.x + width / 2, point.y - height / 2);
-            ctx.lineTo(point.x + width / 2 - skew, point.y + height / 2);
-            ctx.lineTo(point.x - width / 2, point.y + height / 2);
-            ctx.closePath();
-          }
-          ctx.fill();
-          ctx.stroke();
-        }
-        ctx.fillStyle = item.color || "#287a45";
-        ctx.fillText(item.text, point.x, point.y);
-        ctx.restore();
-      });
+      MapTextRenderer.draw(ctx, { state, worldToPixel });
     }
 
     function drawPathEndpoints(path, type) {
@@ -1054,36 +1032,6 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       draw();
     }
 
-    function addMapText(pos) {
-      const text = els.mapTextValue.value.trim();
-      if (!text) return;
-      recordHistory();
-      state.texts.push({
-        text,
-        point: pixelToWorld(pos.x, pos.y),
-        color: els.mapTextColor.value,
-        size: Number(els.mapTextSize.value),
-        background: els.mapTextBackground.checked,
-        shape: els.mapTextShape.value
-      });
-      scheduleSave();
-      draw();
-    }
-
-    function eraseMapTextNear(pos) {
-      const index = (state.texts || []).findIndex(item => {
-        const point = worldToPixel(item.point);
-        const radius = Math.max(24, ((Number(item.size) || 26) * (item.text || "").length * .34 + 16) * state.scale);
-        return Math.hypot(pos.x - point.x, pos.y - point.y) < radius;
-      });
-      if (index === -1) return false;
-      recordHistory();
-      state.texts.splice(index, 1);
-      scheduleSave();
-      draw();
-      return true;
-    }
-
     function movePlace(source, target) {
       if (source.q === target.q && source.r === target.r) return false;
       const sourceCell = cellAt(source.q, source.r);
@@ -1123,6 +1071,18 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.roadWidth.value = width;
       els.roadWidthValue.textContent = width + "%";
     }
+
+    const textTool = MapTextToolController.create({
+      state, els, pixelToWorld, worldToPixel, recordHistory, scheduleSave, draw
+    });
+    const {
+      beginInteraction: beginMapTextInteraction,
+      deleteSelected: deleteSelectedMapText,
+      eraseNear: eraseMapTextNear,
+      move: moveMapText,
+      syncControls: syncTextControls,
+      updateSelected: updateSelectedMapText
+    } = textTool;
 
     const pathTools = PathToolController.create({
       state, els, pixelToWorld, snapPathPoint, worldToPixel,
@@ -1444,6 +1404,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.cells = data.cells || {};
       state.paths = data.paths || [];
       state.texts = Array.isArray(data.texts) ? data.texts : [];
+      state.selectedTextIndex = null;
+      state.textDrag = null;
       state.currentPath = null;
       state.pathContinuation = null;
       state.selected = null;
@@ -1529,6 +1491,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         points: path.points.map(point => [Number(point.x) - Number(point.y) / 2, Number(point.y)])
       }));
       state.texts = [];
+      state.selectedTextIndex = null;
       state.currentPath = null;
       state.pathContinuation = null;
       state.selected = null;
@@ -1860,6 +1823,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.cells = {};
       state.paths = [];
       state.texts = [];
+      state.selectedTextIndex = null;
       state.currentPath = null;
       state.pathContinuation = null;
       for (let r = 0; r < state.rows; r++) {
@@ -2082,7 +2046,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       });
       els.mapTextSize.addEventListener("input", () => {
         els.mapTextSizeValue.textContent = els.mapTextSize.value + " px";
+        updateSelectedMapText();
       });
+      [els.mapTextValue, els.mapTextColor, els.mapTextBackground, els.mapTextShape, els.mapTextBackgroundColor, els.mapTextBorderColor, els.mapTextFont].forEach(control => {
+        control.addEventListener(control.type === "text" ? "input" : "change", updateSelectedMapText);
+      });
+      els.deleteSelectedTextBtn.addEventListener("click", deleteSelectedMapText);
       els.deleteSelectedPathBtn.addEventListener("click", deleteSelectedPath);
       els.undoBtn.addEventListener("click", undo);
       els.redoBtn.addEventListener("click", redo);
@@ -2202,7 +2171,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     MapCanvasController.bind({
       canvas, state, key, pixelToHex, pixelToWorld, worldToPixel,
-      findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, addMapText, eraseMapTextNear,
+      findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, moveMapText, eraseMapTextNear,
       recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection,
       setTool, syncDetails, setZoom, focusSelectedName: () => els.selectedName.focus(), resizeCanvas
     });

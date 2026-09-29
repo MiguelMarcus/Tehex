@@ -37,6 +37,8 @@
       cells: {},
       paths: [],
       texts: [],
+      selectedTextIndex: null,
+      textDrag: null,
       currentPath: null,
       pathContinuation: null,
       selectedPathIndex: null,

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, addMapText, eraseMapTextNear, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
+  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, moveMapText, eraseMapTextNear, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
     function pointerPos(event) {
       const rect = canvas.getBoundingClientRect();
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -32,7 +32,7 @@
         }
       }
       if (state.tool === "text") {
-        addMapText(pos);
+        beginMapTextInteraction(pos);
         state.isPainting = false;
         return;
       }
@@ -88,6 +88,10 @@
       }
       const pos = pointerPos(event);
       const cell = pixelToHex(pos.x, pos.y);
+      if (state.textDrag) {
+        moveMapText(pos);
+        return;
+      }
       if (state.placeDrag) {
         const drag = state.placeDrag;
         if (!cell || (cell.q === drag.source.q && cell.r === drag.source.r)) return;
@@ -150,6 +154,7 @@
       state.isPanning = false;
       state.panStart = null;
       state.pathDrag = null;
+      state.textDrag = null;
       state.placeDrag = null;
       state.activePathKey = null;
       if (wasRightClick) clearPathSelection();
