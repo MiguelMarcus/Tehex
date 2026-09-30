@@ -41,7 +41,7 @@
           type: state.tool,
           style: state.tool === "road" ? state.roadStyle : undefined,
           color: state.tool === "road" ? state.roadColor : undefined,
-          width: state.tool === "road" ? state.roadWidth : undefined,
+          width: state.roadWidth,
           snapToEdges: state.snapToEdges,
           snapToCenters: !state.snapToEdges,
           points: [point]
@@ -136,12 +136,14 @@
     }
 
     function eraseNear(pos) {
-      const point = pixelToWorld(pos.x, pos.y);
-      const radius = .45;
+      const threshold = Math.max(10, state.hexSize * state.scale * .34);
+      const roadIndex = findPathAt(pos, "road");
+      const riverIndex = roadIndex === -1 ? findPathAt(pos, "river") : -1;
+      const eraseIndex = roadIndex !== -1 ? roadIndex : riverIndex;
       const before = (state.paths || []).length;
-      const willErase = (state.paths || []).some(path => path.points.some(p => Math.hypot(p[0] - point[0], p[1] - point[1]) < radius));
-      if (willErase) recordHistory();
-      state.paths = (state.paths || []).filter(path => !path.points.some(p => Math.hypot(p[0] - point[0], p[1] - point[1]) < radius));
+      if (eraseIndex === -1) return;
+      recordHistory();
+      state.paths = (state.paths || []).filter((path, index) => index !== eraseIndex);
       if (state.paths.length !== before) scheduleSave();
     }
 

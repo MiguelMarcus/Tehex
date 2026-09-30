@@ -20,6 +20,28 @@ const placeTypes = {
   settlement: { label: "Povoado", color: "#653f24", icon: "assets/hex-icons/catalog/village.svg" }, castle: { label: "Castelo", color: "#3f4751", icon: "assets/hex-icons/catalog/castle.svg" }, temple: { label: "Templo", color: "#7c5a24", icon: "assets/hex-icons/temple.svg" }, tower: { label: "Torre", color: "#4d5360", icon: "assets/hex-icons/catalog/tower-flag.svg" }, ruins: { label: "Ruinas", color: "#6f6250", icon: "assets/hex-icons/catalog/dead-wood.svg" }, mine: { label: "Mina", color: "#3c3b36", icon: "assets/hex-icons/catalog/cave-entrance.svg" }, hut: { label: "Cabana", color: "#653f24", icon: "assets/hex-icons/catalog/hut.svg" }, house: { label: "Casa", color: "#653f24", icon: "assets/hex-icons/catalog/house.svg" }, camp: { label: "Acampamento", color: "#653f24", icon: "assets/hex-icons/catalog/camping-tent.svg" }, windmill: { label: "Moinho", color: "#653f24", icon: "assets/hex-icons/catalog/windmill.svg" }, pier: { label: "Pier", color: "#653f24", icon: "assets/hex-icons/catalog/wooden-pier.svg" }, bridge: { label: "Ponte", color: "#653f24", icon: "assets/hex-icons/catalog/tall-bridge.svg" }, signpost: { label: "Placa", color: "#653f24", icon: "assets/hex-icons/catalog/direction-signs.svg" }, galleon: { label: "Galeao", color: "#653f24", icon: "assets/hex-icons/catalog/galleon.svg" }, citadel: { label: "Cidadela", color: "#653f24", icon: "assets/hex-icons/catalog/qaitbay-citadel.svg" }
 };
 
+Object.assign(placeTypes, {
+  woodenDoor: { label: "Porta de madeira", color: "#653f24", icon: "assets/hex-icons/catalog/wooden-door.svg" },
+  medievalVillage: { label: "Aldeia medieval", color: "#653f24", icon: "assets/hex-icons/catalog/medieval-village-01.svg" },
+  whiteTower: { label: "Torre branca", color: "#d8d8d2", icon: "assets/hex-icons/catalog/white-tower.svg" },
+  danger: { label: "Sinal de perigo", color: "#9b2f2f", icon: "assets/hex-icons/catalog/cancel.svg" },
+  dolmen: { label: "Dolmen", color: "#6f6250", icon: "assets/hex-icons/catalog/dolmen.svg" },
+  diabloSkull: { label: "Caveira demoníaca", color: "#3c3b36", icon: "assets/hex-icons/catalog/diablo-skull.svg" },
+  mayanPyramid: { label: "Pirâmide maia", color: "#ad8c4b", icon: "assets/hex-icons/catalog/mayan-pyramid.svg" },
+  church: { label: "Igreja", color: "#d8d8d2", icon: "assets/hex-icons/catalog/church.svg?v=20260930-2" },
+  goblinCamp: { label: "Acampamento goblin", color: "#4b5f32", icon: "assets/hex-icons/catalog/goblin-camp.svg?v=20260930-2" },
+  deathSkull: { label: "Caveira", color: "#3c3b36", icon: "assets/hex-icons/catalog/death-skull.svg" },
+  tombstone: { label: "Lápide", color: "#82796a", icon: "assets/hex-icons/catalog/tombstone.svg" },
+  graveyard: { label: "Cemitério", color: "#5a4b3d", icon: "assets/hex-icons/catalog/graveyard.svg?v=20260930-2" }
+  , totem: { label: "Totem", color: "#6f6250", icon: "assets/hex-icons/catalog/totem.svg" }
+  , axeInStump: { label: "Machado no tronco", color: "#653f24", icon: "assets/hex-icons/catalog/axe-in-stump.svg" }
+  , grainBundle: { label: "Feixe de grãos", color: "#ad8c4b", icon: "assets/hex-icons/catalog/grain-bundle.svg" }
+  , chest: { label: "Baú", color: "#ad8c4b", icon: "assets/hex-icons/catalog/chest.svg" }
+  , campfire: { label: "Fogueira", color: "#9b2f2f", icon: "assets/hex-icons/catalog/campfire.svg" }
+  , twoCoins: { label: "Duas moedas", color: "#ad8c4b", icon: "assets/hex-icons/catalog/two-coins.svg" }
+  , horseshoe: { label: "Ferradura", color: "#82796a", icon: "assets/hex-icons/catalog/horseshoe.svg" }
+});
+
 const terrainGroups = [
   { id: "lowlands", name: "Planicies", terrains: ["grass", "sand", "snow", "mushroom"] }, { id: "forests", name: "Florestas", terrains: ["forest", "denseForest", "willowForest", "deadForest"] }, { id: "highlands", name: "Altitudes", terrains: ["hills", "mountain", "volcano"] }, { id: "waters", name: "Aguas", terrains: ["water", "ocean", "swamp"] }
 ];

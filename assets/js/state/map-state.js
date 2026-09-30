@@ -21,6 +21,8 @@
       terrainIconScale: 1,
       terrainIconScales: {},
       placeIconScales: {},
+      placeIconScale: 1,
+      placeDraft: null,
       snapToEdges: false,
       roadSnapToEdges: false,
       riverSnapToEdges: false,

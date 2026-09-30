@@ -36,6 +36,8 @@
     if (!id) return { ok: false, error: new Error("Mapa sem identificador") };
     try {
       window.localStorage.removeItem(itemKey(id));
+      const current = loadCurrent();
+      if (current && current.mapId === id) window.localStorage.removeItem(projectKey);
     } catch (error) {
       return { ok: false, error };
     }

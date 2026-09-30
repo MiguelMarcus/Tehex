@@ -147,9 +147,14 @@
       }
     });
 
-    canvas.addEventListener("pointerup", event => {
-      const wasRightClick = event.button === 2 && state.panStart && Math.hypot(event.clientX - state.panStart.x, event.clientY - state.panStart.y) < 5;
-      finishFreePath();
+    function finishPointer(event) {
+      const wasRightClick = event && event.button === 2 && state.panStart && Math.hypot(event.clientX - state.panStart.x, event.clientY - state.panStart.y) < 5;
+      if (event && (event.type === "pointercancel" || event.type === "lostpointercapture")) {
+        state.currentPath = null;
+        state.pathContinuation = null;
+      } else {
+        finishFreePath();
+      }
       state.isPainting = false;
       state.isPanning = false;
       state.panStart = null;
@@ -158,7 +163,11 @@
       state.placeDrag = null;
       state.activePathKey = null;
       if (wasRightClick) clearPathSelection();
-    });
+    }
+
+    canvas.addEventListener("pointerup", finishPointer);
+    canvas.addEventListener("pointercancel", finishPointer);
+    canvas.addEventListener("lostpointercapture", finishPointer);
 
     canvas.addEventListener("pointerleave", () => {
       if (!state.hoveredBrush) return;

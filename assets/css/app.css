@@ -423,6 +423,7 @@
 
     .new-map-dialog {
       width: min(620px, 100%);
+      max-height: calc(100dvh - 32px);
       border: 1px solid #a87a24;
       border-radius: 8px;
       overflow: hidden;
@@ -469,7 +470,7 @@
     .style-card strong { display: block; color: #3d2d1b; font-size: 14px; }
     .style-card span { display: block; margin-top: 5px; color: #665842; font-size: 12px; line-height: 1.35; white-space: normal; }
     .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid #d6bd87; }
-    .saved-maps-dialog { width: min(860px, 100%); border: 1px solid #a87a24; border-radius: 8px; overflow: hidden; background: #f8edd2; box-shadow: 0 22px 60px rgba(20, 20, 15, .34); }
+    .saved-maps-dialog { width: min(860px, 100%); max-height: calc(100dvh - 32px); border: 1px solid #a87a24; border-radius: 8px; overflow: hidden; background: #f8edd2; box-shadow: 0 22px 60px rgba(20, 20, 15, .34); }
     .dialog-subtitle { margin: 4px 0 0; color: #76634a; font-size: 12px; }
     .saved-map-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; max-height: min(70vh, 600px); overflow: auto; }
     .saved-map-item { display: grid; grid-template-rows: auto 1fr auto; gap: 10px; min-width: 0; padding: 10px; border: 1px solid #d6bd87; border-radius: 7px; background: #fffaf0; }
@@ -483,6 +484,16 @@
     .saved-map-actions button { min-height: 32px; }
     .saved-map-delete { width: 34px; padding: 0; color: #8b3f2f; }
     .saved-map-empty { margin: 0; padding: 20px 6px; color: #76634a; text-align: center; }
+    .library-tabs { display: flex; gap: 6px; margin: -2px 0 14px; border-bottom: 1px solid #d6bd87; }
+    .library-tabs button { min-height: 32px; padding: 6px 12px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #76634a; }
+    .library-tabs button.active { border-bottom-color: #9b700d; color: #493414; font-weight: 800; }
+    .color-library-list { display: grid; gap: 7px; margin-top: 14px; }
+    .color-library-item { display: flex; align-items: center; gap: 8px; padding: 7px; border: 1px solid #d6bd87; border-radius: 6px; background: #fffaf0; }
+    .color-library-item > span:nth-child(2) { flex: 1; color: #47331b; font-size: 12px; }
+    .color-library-item button { min-height: 28px; padding: 4px 8px; font-size: 11px; }
+    .color-library-swatches { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .color-library-swatch { width: 18px; min-height: 18px; padding: 0; border: 1px solid rgba(55, 42, 25, .35); border-radius: 50%; }
+    .color-library-swatch--large { flex: 0 0 26px; width: 26px; min-height: 26px; }
     .map-settings-block { padding: 0 0 16px; margin-bottom: 16px; border-bottom: 1px solid #d6bd87; }
     .map-settings-block:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
     .map-settings-block h3 { margin: 0 0 8px; color: #5e4320; font-size: 13px; }

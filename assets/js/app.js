@@ -25,7 +25,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     const roadWidthRow = document.createElement("label");
     roadWidthRow.className = "range-row";
     roadWidthRow.htmlFor = "roadWidth";
-    roadWidthRow.innerHTML = 'Largura: <span id="roadWidthValue">100%</span><input id="roadWidth" type="range" min="50" max="220" value="100">';
+    roadWidthRow.innerHTML = 'Largura do traço: <span id="roadWidthValue">100%</span><input id="roadWidth" type="range" min="50" max="220" value="100">';
     roadColorRow.after(roadWidthRow);
     const textStyleOptions = document.createElement("div");
     textStyleOptions.className = "feature-form-grid";
@@ -147,6 +147,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     });
 
     const state = MapState.create();
+    let placeDraftEditor = null;
     const defaultLayers = () => ({ terrain: true, terrainIcons: true, relief: true, places: true, labels: true, roads: true, rivers: true, grid: true, coordinates: false });
 
     let history;
@@ -272,6 +273,14 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       styleProfileName: document.getElementById("styleProfileName"),
       saveStyleProfileBtn: document.getElementById("saveStyleProfileBtn"),
       styleProfileList: document.getElementById("styleProfileList"),
+      styleTab: document.getElementById("styleTab"),
+      colorsTab: document.getElementById("colorsTab"),
+      stylePanel: document.getElementById("stylePanel"),
+      colorsPanel: document.getElementById("colorsPanel"),
+      colorName: document.getElementById("colorName"),
+      colorValue: document.getElementById("colorValue"),
+      saveColorBtn: document.getElementById("saveColorBtn"),
+      colorLibraryList: document.getElementById("colorLibraryList"),
       helpBtn: document.getElementById("helpBtn"),
       helpModal: document.getElementById("helpModal"),
       exportOptionsModal: document.getElementById("exportOptionsModal"),
@@ -489,9 +498,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         ctx.lineJoin = "round";
         const strokePath = path.snapToEdges ? strokeLinearPath : strokeSmoothPath;
         if (type === "river") {
-          strokePath(path.points, isOldSchool() ? "#000000" : "rgba(31, 82, 128, .78)", 9 * state.scale);
-          strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(83, 157, 205, .95)", 3 * state.scale);
-          if (!isOldSchool()) strokePath(path.points, "rgba(168, 220, 238, .85)", 2.2 * state.scale);
+          const width = Math.max(.5, Math.min(2.2, Number(path.width) || state.roadWidth || 1));
+          strokePath(path.points, isOldSchool() ? "#000000" : "rgba(31, 82, 128, .78)", 9 * width * state.scale);
+          strokePath(path.points, isOldSchool() ? "#ffffff" : "rgba(83, 157, 205, .95)", 3 * width * state.scale);
+          if (!isOldSchool()) strokePath(path.points, "rgba(168, 220, 238, .85)", 2.2 * width * state.scale);
         } else {
           const style = path.style || "simple";
           const width = Math.max(.5, Math.min(2.2, Number(path.width) || state.roadWidth || 1));
@@ -776,8 +786,13 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       ctx.save();
       const hasVisibleLabel = Boolean(place.name) && place.showLabel !== false;
       const badgeY = place.iconPosition === "center" || (place.iconPosition !== "top" && !hasVisibleLabel) ? y : y - size * .2;
-      const iconScale = place.iconScale || state.placeIconScales[place.type] || 1;
+      const hasCustomIconScale = place.iconScaleCustom === true || (place.iconScaleCustom === undefined && place.iconScale !== undefined);
+      const iconScale = hasCustomIconScale ? (Number(place.iconScale) || 1) : state.placeIconScale;
       const radius = size * .34 * Math.max(1, iconScale * .92);
+      if (place.showIcon === false) {
+        ctx.restore();
+        return;
+      }
       if (place.iconBackgroundEnabled !== false) {
         ctx.shadowColor = "rgba(58, 35, 18, .28)";
         ctx.shadowBlur = 4 * state.scale;
@@ -789,11 +804,13 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         ctx.lineWidth = Math.max(2, 3 * state.scale);
         ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(88, 54, 27, .74)");
         ctx.stroke();
-        ctx.lineWidth = Math.max(1, 1.3 * state.scale);
-        ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(255, 234, 176, .72)");
-        ctx.beginPath();
-        ctx.arc(x, badgeY, radius - 4 * state.scale, 0, Math.PI * 2);
-        ctx.stroke();
+        if (place.iconBorderStyle !== "simple") {
+          ctx.lineWidth = Math.max(1, 1.3 * state.scale);
+          ctx.strokeStyle = place.iconBorderColor || (isOldSchool() ? "#000000" : "rgba(255, 234, 176, .72)");
+          ctx.beginPath();
+          ctx.arc(x, badgeY, radius - 4 * state.scale, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
       drawSvgIcon(type.icon, x, badgeY, size * .48 * iconScale, .96);
       ctx.restore();
@@ -896,6 +913,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.riverOptionsSection.hidden = tool !== "river";
       if (tool === "road") state.snapToEdges = state.roadSnapToEdges;
       if (tool === "river") state.snapToEdges = state.riverSnapToEdges;
+      if (tool === "road" || tool === "river") (tool === "road" ? els.roadOptionsSection : els.riverOptionsSection).appendChild(roadWidthRow);
       state.selectExistingPaths = tool === "road" ? state.roadSelectExisting : tool === "river" ? state.riverSelectExisting : false;
       els.editLabelSection.hidden = tool !== "select";
       els.toolHint.textContent = tool === "navigate"
@@ -909,6 +927,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
             : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
+      if (tool === "place") renderPlaceDraftEditor();
       draw();
     }
 
@@ -964,11 +983,30 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.placePreviewIcon.src = type.icon;
       els.placePreviewName.textContent = type.label;
       document.querySelectorAll("[data-place]").forEach(button => button.classList.toggle("active", button.dataset.place === els.placeType.value));
-      const value = Math.round((state.placeIconScales[els.placeType.value] || 1) * 100);
+      const value = Math.round(state.placeIconScale * 100);
       els.placeIconScaleLabel.textContent = "Tamanho do icone de " + type.label;
       els.placeIconScale.value = value;
       els.placeIconScaleInput.value = value;
       els.placeIconScaleValue.textContent = value + "%";
+      renderPlaceDraftEditor();
+    }
+
+    function renderPlaceDraftEditor() {
+      if (!placeDraftEditor || state.tool !== "place") return;
+      if (!state.placeDraft || state.placeDraft.type !== els.placeType.value) {
+        state.placeDraft = { ...(state.placeDraft || {}), name: state.placeDraft?.name || "", type: els.placeType.value || "settlement", iconScale: state.placeIconScale, iconScaleCustom: false };
+      } else if (!state.placeDraft.iconScaleCustom) {
+        state.placeDraft.iconScale = state.placeIconScale;
+      }
+      placeDraftEditor.replaceChildren(PlaceLabelEditor.create(state.placeDraft, {
+        icons: Object.entries(placeTypes).map(([id, item]) => ({ id, label: item.label })),
+        onChange: (changes, metadata) => {
+          state.placeDraft = { ...state.placeDraft, ...changes, iconScaleCustom: metadata?.iconScaleChanged ? true : state.placeDraft.iconScaleCustom };
+          if (changes.type) els.placeType.value = changes.type;
+          updatePlacePreview();
+        }
+      }));
+      refreshColorInputs();
     }
 
     function populatePlaceTypes() {
@@ -1019,9 +1057,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function buildPlacePalette() {
       const groups = [
-        ["Assentamentos", ["settlement", "hut", "house", "camp", "windmill"]],
-        ["Fortificacoes", ["castle", "citadel", "tower"]],
-        ["Marcos", ["temple", "ruins", "mine", "pier", "bridge", "signpost", "galleon"]]
+        ["Assentamentos", ["settlement", "medievalVillage", "hut", "house", "camp", "goblinCamp", "church", "windmill"]],
+        ["Fortificacoes", ["castle", "citadel", "tower", "whiteTower", "woodenDoor"]],
+        ["Marcos", ["temple", "ruins", "mine", "pier", "bridge", "signpost", "galleon", "dolmen", "mayanPyramid", "totem", "axeInStump", "grainBundle", "chest", "campfire", "twoCoins", "horseshoe", "danger", "diabloSkull", "deathSkull", "tombstone", "graveyard"]]
       ];
       els.placeGrid.replaceChildren();
       groups.forEach(([name, ids]) => {
@@ -1032,7 +1070,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         const grid = document.createElement("div");
         grid.className = "terrain-grid";
         ids.map(id => ({ id, ...placeTypes[id] })).forEach(place => grid.appendChild(createChoice(place, "place", () => {
+          const iconScale = state.placeDraft?.iconScale ?? state.placeIconScale;
           els.placeType.value = place.id;
+          state.placeIconScale = iconScale;
+          state.placeDraft = { ...(state.placeDraft || {}), type: place.id, iconScale, iconScaleCustom: Boolean(state.placeDraft?.iconScaleCustom) };
           updatePlacePreview();
           document.querySelectorAll("[data-place]").forEach(button => button.classList.toggle("active", button.dataset.place === place.id));
         })));
@@ -1053,7 +1094,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         });
       } else if (state.tool === "place") {
         const cell = cellAt(q, r);
-        cell.place = { name: "", type: els.placeType.value };
+        cell.place = { ...(state.placeDraft || {}), name: state.placeDraft?.name || "", type: els.placeType.value };
       } else if (state.tool === "relief") {
         cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
           cellAt(brushQ, brushR).elevation = state.reliefLevel;
@@ -1105,11 +1146,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function syncRoadAppearanceControls(path) {
       const road = path?.type === "road" ? path : null;
+      const line = path?.type === "road" || path?.type === "river" ? path : null;
       els.roadColor.disabled = !road;
-      els.roadWidth.disabled = !road;
-      if (!road) return;
-      els.roadColor.value = /^#[0-9a-f]{6}$/i.test(road.color || "") ? road.color : state.roadColor;
-      const width = Math.round((Number(road.width) || state.roadWidth || 1) * 100);
+      els.roadWidth.disabled = !line;
+      if (!line) return;
+      if (road) els.roadColor.value = /^#[0-9a-f]{6}$/i.test(road.color || "") ? road.color : state.roadColor;
+      const width = Math.round((Number(line.width) || state.roadWidth || 1) * 100);
       els.roadWidth.value = width;
       els.roadWidthInput.value = width;
       els.roadWidthValue.textContent = width + "%";
@@ -1179,9 +1221,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.editLabelEditor.className = "";
       els.editLabelEditor.appendChild(PlaceLabelEditor.create(cell.place, {
         icons: Object.entries(placeTypes).map(([id, item]) => ({ id, label: item.label })),
-        onChange: changes => {
+        onChange: (changes, metadata) => {
         recordHistory();
-        cell.place = { ...cell.place, ...changes };
+        cell.place = { ...cell.place, ...changes, iconScaleCustom: metadata?.iconScaleChanged ? true : cell.place.iconScaleCustom };
         els.selectedName.value = changes.name;
         els.selectedTextScale.value = Math.round(changes.textScale * 100);
         els.selectedTextScaleInput.value = els.selectedTextScale.value;
@@ -1192,6 +1234,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         draw();
         }
       }));
+      refreshColorInputs();
     }
 
     function applyDetails() {
@@ -1282,8 +1325,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       context.lineWidth = .7;
       for (let row = 0; row < rows; row++) {
         for (let column = 0; column < cols; column++) {
-          const centerX = offsetX + column * horizontal;
-          const centerY = offsetY + row * vertical + (column % 2 ? vertical / 2 : 0);
+          const centerX = offsetX + column * horizontal + (row % 2 ? horizontal / 2 : 0);
+          const centerY = offsetY + row * vertical;
           const cell = cells[column + ":" + row] || cells[column + "," + row] || {};
           const radius = hexWidth * .58;
           context.beginPath();
@@ -1355,7 +1398,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         remove.addEventListener("click", () => {
           if (!window.confirm("Excluir o mapa salvo \"" + (map.name || "Mapa sem nome") + "\"?")) return;
           const result = MapPersistence.remove(map.id);
-          if (result.ok) updateSavedMapList();
+          if (result.ok) {
+            if (map.id === state.mapId) state.mapId = null;
+            updateSavedMapList();
+          }
         });
         actions.append(open, remove);
         row.append(thumbnail, info, actions);
@@ -1399,6 +1445,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     function resizeMap(side, delta) {
       const isColumn = side === "left" || side === "right";
       if (delta < 0 && (isColumn ? state.cols : state.rows) <= 4) return;
+      recordHistory();
       const shiftQ = side === "left" && delta > 0 ? 1 : side === "left" && delta < 0 ? -1 : 0;
       const shiftR = side === "top" && delta > 0 ? 1 : side === "top" && delta < 0 ? -1 : 0;
       const nextCells = {};
@@ -1447,6 +1494,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         terrainIconScale: state.terrainIconScale,
         terrainIconScales: state.terrainIconScales,
         placeIconScales: state.placeIconScales,
+        placeIconScale: state.placeIconScale,
         cols: state.cols,
         rows: state.rows,
         cells: state.cells,
@@ -1492,9 +1540,23 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     function redo() { history.redo(); }
 
     function importState(data) {
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Arquivo de mapa invalido");
       if (data && data.settings && data.hexes) {
         importHexerMap(data);
         return;
+      }
+      const cols = Number(data.cols);
+      const rows = Number(data.rows);
+      if (!Number.isInteger(cols) || cols < 6 || cols > 300 || !Number.isInteger(rows) || rows < 6 || rows > 200) {
+        throw new Error("Dimensoes do mapa invalidas");
+      }
+      if (!data.cells || typeof data.cells !== "object" || Array.isArray(data.cells)) throw new Error("Celulas do mapa invalidas");
+      const paths = data.paths === undefined ? [] : data.paths;
+      if (!Array.isArray(paths) || paths.some(path => !path || !Array.isArray(path.points) || path.points.length < 2 || path.points.some(point => !Array.isArray(point) || point.length < 2 || point.some(value => !Number.isFinite(Number(value)))))) {
+        throw new Error("Caminhos do mapa invalidos");
+      }
+      if (data.texts !== undefined && (!Array.isArray(data.texts) || data.texts.some(item => !item || !Array.isArray(item.point) || item.point.length < 2 || item.point.some(value => !Number.isFinite(Number(value)))))) {
+        throw new Error("Textos do mapa invalidos");
       }
       if (!history.isRestoring()) clearHistory();
       state.mapId = data.mapId || state.mapId || createMapId();
@@ -1519,12 +1581,15 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.terrainIconScale = Math.max(.6, Math.min(1.6, Number(data.terrainIconScale) || 1));
       state.terrainIconScales = data.terrainIconScales || {};
       state.placeIconScales = data.placeIconScales || {};
-      state.cols = Number(data.cols) || 28;
-      state.rows = Number(data.rows) || 20;
+      state.placeIconScale = Math.max(.25, Math.min(3, Number(data.placeIconScale) || Object.values(state.placeIconScales)[0] || 1));
+      state.cols = cols;
+      state.rows = rows;
       state.cells = data.cells || {};
-      state.paths = data.paths || [];
+      state.paths = paths;
       state.texts = Array.isArray(data.texts) ? data.texts : [];
+      els.mapSizeLabel.textContent = state.cols + " x " + state.rows;
       state.selectedTextIndex = null;
+      state.placeDraft = null;
       state.textDrag = null;
       state.currentPath = null;
       state.pathContinuation = null;
@@ -1592,6 +1657,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.terrainIconScale = 1;
       state.terrainIconScales = {};
       state.placeIconScales = {};
+      state.placeIconScale = 1;
       state.cells = {};
       for (let r = 0; r < state.rows; r++) {
         for (let q = 0; q < state.cols; q++) cellAt(q, r);
@@ -1942,6 +2008,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.terrainIconScale = 1;
       state.terrainIconScales = {};
       state.placeIconScales = {};
+      state.placeIconScale = 1;
       state.cells = {};
       state.paths = [];
       state.texts = [];
@@ -1991,6 +2058,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         terrainIconScale: state.terrainIconScale,
         terrainIconScales: { ...state.terrainIconScales },
         placeIconScales: { ...state.placeIconScales },
+        placeIconScale: state.placeIconScale,
         roadStyle: state.roadStyle,
         roadColor: state.roadColor,
         roadWidth: state.roadWidth,
@@ -2006,6 +2074,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       state.terrainIconScale = Number(settings.terrainIconScale) || 1;
       state.terrainIconScales = { ...(settings.terrainIconScales || {}) };
       state.placeIconScales = { ...(settings.placeIconScales || {}) };
+      state.placeIconScale = Math.max(.25, Math.min(3, Number(settings.placeIconScale) || Object.values(state.placeIconScales)[0] || 1));
       state.roadStyle = ["trail", "simple", "main"].includes(settings.roadStyle) ? settings.roadStyle : "simple";
       state.roadColor = /^#[0-9a-f]{6}$/i.test(settings.roadColor || "") ? settings.roadColor : "#b78b4b";
       state.roadWidth = Math.max(.5, Math.min(2.2, Number(settings.roadWidth) || 1));
@@ -2057,6 +2126,77 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         row.append(name, apply, remove);
         els.styleProfileList.appendChild(row);
       });
+    }
+
+    function applyColorToInput(input, value) {
+      if (!input || !/^#[0-9a-f]{6}$/i.test(value || "")) return;
+      input.value = value.toLowerCase();
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function refreshColorInputs() {
+      const colors = ColorLibrary.list();
+      document.querySelectorAll('input[type="color"]').forEach(input => {
+        let palette = input.nextElementSibling;
+        if (!palette || !palette.classList.contains("color-library-swatches")) {
+          palette = document.createElement("div");
+          palette.className = "color-library-swatches";
+          input.after(palette);
+        }
+        palette.replaceChildren();
+        colors.forEach(color => {
+          const swatch = document.createElement("button");
+          swatch.type = "button";
+          swatch.className = "color-library-swatch";
+          swatch.style.backgroundColor = color.value;
+          swatch.title = color.name + " (" + color.value + ")";
+          swatch.setAttribute("aria-label", "Usar " + color.name);
+          swatch.addEventListener("click", () => applyColorToInput(input, color.value));
+          palette.appendChild(swatch);
+        });
+      });
+    }
+
+    function renderColorLibrary() {
+      els.colorLibraryList.replaceChildren();
+      const colors = ColorLibrary.list();
+      if (!colors.length) {
+        const empty = document.createElement("p");
+        empty.className = "hint";
+        empty.textContent = "Nenhuma cor personalizada ainda.";
+        els.colorLibraryList.appendChild(empty);
+        refreshColorInputs();
+        return;
+      }
+      colors.forEach(color => {
+        const row = document.createElement("div");
+        row.className = "color-library-item";
+        const swatch = document.createElement("span");
+        swatch.className = "color-library-swatch color-library-swatch--large";
+        swatch.style.backgroundColor = color.value;
+        swatch.title = color.value;
+        const name = document.createElement("span");
+        name.textContent = color.name;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Excluir";
+        remove.addEventListener("click", () => { ColorLibrary.remove(color.id); renderColorLibrary(); });
+        row.append(swatch, name, remove);
+        els.colorLibraryList.appendChild(row);
+      });
+      refreshColorInputs();
+    }
+
+    function selectStyleLibraryTab(tab) {
+      const colors = tab === "colors";
+      els.stylePanel.hidden = colors;
+      els.colorsPanel.hidden = !colors;
+      els.styleTab.classList.toggle("active", !colors);
+      els.colorsTab.classList.toggle("active", colors);
+      els.styleTab.setAttribute("aria-selected", String(!colors));
+      els.colorsTab.setAttribute("aria-selected", String(colors));
+      if (colors) renderColorLibrary();
     }
 
     function openExportOptions() {
@@ -2140,6 +2280,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       savedMapsTitle.append(savedMapsHeading, savedMapsSubtitle);
       els.savedMapsModal.querySelector(".dialog-head").prepend(savedMapsTitle);
       makeSectionsCollapsible();
+      placeDraftEditor = document.createElement("div");
+      placeDraftEditor.className = "place-draft-editor";
+      placeDraftEditor.id = "placeDraftEditor";
+      (els.placeSection.querySelector(".section-content") || els.placeSection).appendChild(placeDraftEditor);
       populatePlaceTypes();
       buildTerrainPalette();
       buildPlacePalette();
@@ -2169,7 +2313,12 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         draw();
       });
       els.placeIconScale.addEventListener("input", () => {
-        state.placeIconScales[els.placeType.value] = Number(els.placeIconScale.value) / 100;
+        state.placeIconScale = Number(els.placeIconScale.value) / 100;
+        state.placeIconScales[els.placeType.value] = state.placeIconScale;
+        if (state.placeDraft && !state.placeDraft.iconScaleCustom && state.placeDraft.type === els.placeType.value) {
+          state.placeDraft.iconScale = state.placeIconScale;
+          renderPlaceDraftEditor();
+        }
         els.placeIconScaleValue.textContent = els.placeIconScale.value + "%";
         scheduleSave();
         draw();
@@ -2212,7 +2361,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       });
       els.roadWidth.addEventListener("input", () => {
         const path = state.paths[state.selectedPathIndex];
-        if (!path || path.type !== "road") return;
+        if (!path || (path.type !== "road" && path.type !== "river")) return;
         recordHistory();
         path.width = Number(els.roadWidth.value) / 100;
         els.roadWidthValue.textContent = els.roadWidth.value + "%";
@@ -2266,8 +2415,15 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.importFile.addEventListener("change", async () => {
         const file = els.importFile.files[0];
         if (!file) return;
-        importState(JSON.parse(await file.text()));
-        els.importFile.value = "";
+        try {
+          importState(JSON.parse(await file.text()));
+          els.saveStatus.textContent = "Mapa importado";
+        } catch (error) {
+          console.error("Falha ao importar mapa", error);
+          els.saveStatus.textContent = "Arquivo de mapa invalido";
+        } finally {
+          els.importFile.value = "";
+        }
       });
       els.optionsBtn.addEventListener("click", () => {
         els.optionsMenu.hidden = !els.optionsMenu.hidden;
@@ -2310,6 +2466,15 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         els.styleProfileName.value = "";
         renderStyleProfiles();
       });
+      els.styleTab.addEventListener("click", () => selectStyleLibraryTab("styles"));
+      els.colorsTab.addEventListener("click", () => selectStyleLibraryTab("colors"));
+      els.saveColorBtn.addEventListener("click", () => {
+        const result = ColorLibrary.save(els.colorName.value.trim(), els.colorValue.value);
+        if (!result.ok) return;
+        els.colorName.value = "";
+        renderColorLibrary();
+      });
+      refreshColorInputs();
       document.querySelectorAll("[data-close-modal]").forEach(button => {
         button.addEventListener("click", () => { document.getElementById(button.dataset.closeModal).hidden = true; });
       });
