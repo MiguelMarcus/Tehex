@@ -1,4 +1,7 @@
 const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
+const landmarkPlaceTypes = new Set(["temple", "ruins", "mine", "pier", "bridge", "signpost", "galleon", "dolmen", "mayanPyramid", "totem", "axeInStump", "grainBundle", "chest", "campfire", "twoCoins", "horseshoe", "danger", "diabloSkull", "deathSkull", "tombstone", "graveyard"]);
+const settlementPlaceTypes = new Set(["settlement", "medievalVillage", "hut", "house", "camp", "goblinCamp", "church", "windmill"]);
+const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTower", "woodenDoor"]);
 
     window.AppShell.mountApp(document.getElementById("app"));
     WorkspaceFeatures.mount();
@@ -33,6 +36,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
     document.getElementById("textSection").querySelector(".hint").before(textStyleOptions);
     document.getElementById("mapTextShape").appendChild(new Option("Placa retangular", "rectangle"));
     document.getElementById("mapTextSharp").closest(".toggle-row").remove();
+    const exportPlaceCategories = document.createElement("div");
+    exportPlaceCategories.className = "feature-check-grid";
+    exportPlaceCategories.innerHTML = '<label class="feature-check"><input id="exportSettlements" type="checkbox" checked><span>Incluir assentamentos</span></label><label class="feature-check"><input id="exportFortifications" type="checkbox" checked><span>Incluir fortificações</span></label>';
+    document.getElementById("exportPlaces").closest(".feature-check").before(exportPlaceCategories);
 
     const brand = document.querySelector(".brand");
     brand.querySelector(".mark + div").classList.add("brand-copy");
@@ -292,6 +299,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       exportCoordinates: document.getElementById("exportCoordinates"),
       exportGrid: document.getElementById("exportGrid"),
       exportPlaces: document.getElementById("exportPlaces"),
+      exportSettlements: document.getElementById("exportSettlements"),
+      exportFortifications: document.getElementById("exportFortifications"),
       exportMapTexts: document.getElementById("exportMapTexts"),
       confirmExportBtn: document.getElementById("confirmExportBtn")
     });
@@ -822,9 +831,16 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       MapRenderPerformance.forEachCell(range, (q, r) => {
         const cell = cellAt(q, r);
         if (!cell.place) return;
+        if (state.isExporting && !shouldExportPlace(cell.place.type)) return;
         const p = hexToPixel(q, r);
         drawPlace(cell.place, p.x, p.y, state.hexSize * state.scale - .8);
       });
+    }
+
+    function shouldExportPlace(type, settings = state) {
+      if (settlementPlaceTypes.has(type)) return settings.exportSettlements !== false && settings.settlements !== false;
+      if (fortificationPlaceTypes.has(type)) return settings.exportFortifications !== false && settings.fortifications !== false;
+      return settings.exportLandmarks !== false && settings.landmarks !== false;
     }
 
     function drawPlaceLabels(range) {
@@ -1756,9 +1772,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           .map(terrain => ({ label: terrain.name, color: displayColor(terrain.color) }));
         if (terrainItems.length) groups.push({ title: "Terrenos", items: terrainItems });
       }
-      if (state.layers.places && options.places !== false) {
+      if (state.layers.places) {
         const placeItems = Object.entries(placeTypes)
           .filter(([id]) => usedPlaces.has(id))
+          .filter(([id]) => shouldExportPlace(id, options))
           .map(([, place]) => ({ label: place.label, color: "#a9793f" }));
         if (placeItems.length) groups.push({ title: "Lugares", items: placeItems });
       }
@@ -1857,7 +1874,10 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         isExporting: state.isExporting,
         layers: { ...state.layers },
         exportBackground: state.exportBackground,
-        exportMapTexts: state.exportMapTexts
+        exportMapTexts: state.exportMapTexts,
+        exportLandmarks: state.exportLandmarks,
+        exportSettlements: state.exportSettlements,
+        exportFortifications: state.exportFortifications
       };
       const requestedScale = Number(options.resolution) || 2.25;
       const maxExportSide = 6144;
@@ -1881,8 +1901,11 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state.selected = null;
         state.currentPath = null;
         state.exportBackground = options.background || type === "image/jpeg";
-        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: Boolean(options.grid), places: Boolean(options.places) };
+        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: Boolean(options.grid) };
         state.exportMapTexts = Boolean(options.mapTexts);
+        state.exportLandmarks = Boolean(options.landmarks);
+        state.exportSettlements = Boolean(options.settlements);
+        state.exportFortifications = Boolean(options.fortifications);
         // Confirma visualmente a previsualizacao completa antes de iniciar a
         // varredura por blocos usada para montar a imagem final.
         renderNow();
@@ -1938,6 +1961,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state.layers = old.layers;
         state.exportBackground = old.exportBackground;
         state.exportMapTexts = old.exportMapTexts;
+        state.exportLandmarks = old.exportLandmarks;
+        state.exportSettlements = old.exportSettlements;
+        state.exportFortifications = old.exportFortifications;
         exportProgress.hide();
         draw();
       }
@@ -2208,7 +2234,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.exportCoordinates.checked = state.layers.coordinates;
       els.exportGrid.checked = state.layers.grid;
       els.exportBackground.checked = true;
-      els.exportPlaces.checked = state.layers.places;
+      els.exportPlaces.checked = true;
+      els.exportSettlements.checked = true;
+      els.exportFortifications.checked = true;
       els.exportMapTexts.checked = true;
       openFeatureModal(els.exportOptionsModal);
     }
@@ -2416,7 +2444,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           background: els.exportBackground.checked,
           coordinates: els.exportCoordinates.checked,
           grid: els.exportGrid.checked,
-          places: els.exportPlaces.checked,
+          landmarks: els.exportPlaces.checked,
+          settlements: els.exportSettlements.checked,
+          fortifications: els.exportFortifications.checked,
           mapTexts: els.exportMapTexts.checked
         });
       });
