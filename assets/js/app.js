@@ -291,6 +291,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       exportBackground: document.getElementById("exportBackground"),
       exportCoordinates: document.getElementById("exportCoordinates"),
       exportGrid: document.getElementById("exportGrid"),
+      exportPlaces: document.getElementById("exportPlaces"),
+      exportMapTexts: document.getElementById("exportMapTexts"),
       confirmExportBtn: document.getElementById("confirmExportBtn")
     });
 
@@ -428,7 +430,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       if (state.layers.places) drawPlaces(range);
       ctx.restore();
       drawSelectedHex();
-      drawMapTexts();
+      if (!state.isExporting || state.exportMapTexts !== false) drawMapTexts();
       drawBrushPreview();
       if (state.layers.labels) drawPlaceLabels(range);
       if (state.layers.coordinates) drawCoordinates(range);
@@ -1739,7 +1741,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       DownloadService.saveText(content, filename, type);
     }
 
-    function legendGroups() {
+    function legendGroups(options = {}) {
       const groups = [];
       const usedTerrains = new Set();
       const usedPlaces = new Set();
@@ -1754,7 +1756,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           .map(terrain => ({ label: terrain.name, color: displayColor(terrain.color) }));
         if (terrainItems.length) groups.push({ title: "Terrenos", items: terrainItems });
       }
-      if (state.layers.places) {
+      if (state.layers.places && options.places !== false) {
         const placeItems = Object.entries(placeTypes)
           .filter(([id]) => usedPlaces.has(id))
           .map(([, place]) => ({ label: place.label, color: "#a9793f" }));
@@ -1854,7 +1856,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         currentPath: state.currentPath,
         isExporting: state.isExporting,
         layers: { ...state.layers },
-        exportBackground: state.exportBackground
+        exportBackground: state.exportBackground,
+        exportMapTexts: state.exportMapTexts
       };
       const requestedScale = Number(options.resolution) || 2.25;
       const maxExportSide = 6144;
@@ -1864,7 +1867,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       const size = state.hexSize * exportScale;
       const margin = Math.round(size * .9);
       const titleHeight = options.title ? 82 : 0;
-      const groups = options.legend ? legendGroups() : [];
+      const groups = options.legend ? legendGroups(options) : [];
       const legendHeight = groups.length ? getLegendHeight(groups, exportScale) : 0;
       const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
       const mapHeight = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
@@ -1878,7 +1881,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state.selected = null;
         state.currentPath = null;
         state.exportBackground = options.background || type === "image/jpeg";
-        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: Boolean(options.grid) };
+        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: Boolean(options.grid), places: Boolean(options.places) };
+        state.exportMapTexts = Boolean(options.mapTexts);
         // Confirma visualmente a previsualizacao completa antes de iniciar a
         // varredura por blocos usada para montar a imagem final.
         renderNow();
@@ -1933,6 +1937,7 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         state.isExporting = old.isExporting;
         state.layers = old.layers;
         state.exportBackground = old.exportBackground;
+        state.exportMapTexts = old.exportMapTexts;
         exportProgress.hide();
         draw();
       }
@@ -2203,6 +2208,8 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       els.exportCoordinates.checked = state.layers.coordinates;
       els.exportGrid.checked = state.layers.grid;
       els.exportBackground.checked = true;
+      els.exportPlaces.checked = state.layers.places;
+      els.exportMapTexts.checked = true;
       openFeatureModal(els.exportOptionsModal);
     }
 
@@ -2408,7 +2415,9 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
           legend: els.exportLegend.checked,
           background: els.exportBackground.checked,
           coordinates: els.exportCoordinates.checked,
-          grid: els.exportGrid.checked
+          grid: els.exportGrid.checked,
+          places: els.exportPlaces.checked,
+          mapTexts: els.exportMapTexts.checked
         });
       });
       els.importBtn.addEventListener("click", () => els.importFile.click());

@@ -8,6 +8,7 @@
       hexSize: 31,
       scale: 1,
       isExporting: false,
+      exportMapTexts: true,
       offsetX: 80,
       offsetY: 70,
       mapName: "Mapa Hex Local",
