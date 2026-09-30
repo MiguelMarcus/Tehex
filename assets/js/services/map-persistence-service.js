@@ -32,5 +32,9 @@
     return MapRepository.loadCurrent();
   }
 
-  window.MapPersistence = Object.freeze({ save, list, load, loadCurrent });
+  function remove(id) {
+    return MapRepository.remove(id);
+  }
+
+  window.MapPersistence = Object.freeze({ save, list, load, loadCurrent, remove });
 })();

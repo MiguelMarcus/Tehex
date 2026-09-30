@@ -1257,6 +1257,58 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
       return MapPersistence.list();
     }
 
+    function drawSavedMapThumbnail(canvas, project) {
+      const width = 320;
+      const height = 180;
+      const context = canvas.getContext("2d");
+      const cols = Math.max(1, Number(project?.cols) || 1);
+      const rows = Math.max(1, Number(project?.rows) || 1);
+      const hexWidth = Math.min(18, (width - 12) / (cols + .5));
+      const hexHeight = hexWidth * 1.15;
+      const horizontal = hexWidth;
+      const vertical = hexHeight * .86;
+      const mapWidth = horizontal * (cols + .5);
+      const mapHeight = vertical * (rows - 1) + hexHeight;
+      const offsetX = (width - mapWidth) / 2 + hexWidth / 2;
+      const offsetY = (height - mapHeight) / 2 + hexHeight / 2;
+      const terrainColors = Object.fromEntries(terrains.map(item => [item.id, item.color]));
+      const cells = project?.cells || {};
+
+      canvas.width = width;
+      canvas.height = height;
+      context.fillStyle = project?.style === "oldschool" ? "#c9c7bd" : "#d6dfc0";
+      context.fillRect(0, 0, width, height);
+      context.strokeStyle = "rgba(48, 54, 37, .2)";
+      context.lineWidth = .7;
+      for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < cols; column++) {
+          const centerX = offsetX + column * horizontal;
+          const centerY = offsetY + row * vertical + (column % 2 ? vertical / 2 : 0);
+          const cell = cells[column + ":" + row] || cells[column + "," + row] || {};
+          const radius = hexWidth * .58;
+          context.beginPath();
+          for (let point = 0; point < 6; point++) {
+            const angle = Math.PI / 3 * point + Math.PI / 6;
+            const x = centerX + radius * Math.cos(angle);
+            const y = centerY + radius * Math.sin(angle);
+            if (point === 0) context.moveTo(x, y); else context.lineTo(x, y);
+          }
+          context.closePath();
+          context.fillStyle = terrainColors[cell.terrain] || terrainColors.grass || "#9cab58";
+          context.fill();
+          context.stroke();
+          if (cell.place) {
+            context.fillStyle = "#f7e6ae";
+            context.beginPath();
+            context.arc(centerX, centerY, Math.max(1.8, hexWidth * .16), 0, Math.PI * 2);
+            context.fill();
+            context.strokeStyle = "#51371d";
+            context.stroke();
+          }
+        }
+      }
+    }
+
     function updateSavedMapList() {
       const maps = getSavedMaps().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       els.savedMapList.replaceChildren();
@@ -1268,24 +1320,45 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
         return;
       }
       maps.forEach(map => {
+        const saved = MapPersistence.load(map.id);
         const row = document.createElement("div");
         row.className = "saved-map-item";
+        const thumbnail = document.createElement("canvas");
+        thumbnail.className = "saved-map-thumbnail";
+        thumbnail.setAttribute("aria-label", "Miniatura de " + (map.name || "Mapa sem nome"));
+        if (saved) drawSavedMapThumbnail(thumbnail, saved);
         const info = document.createElement("div");
+        info.className = "saved-map-info";
         const name = document.createElement("strong");
         name.textContent = map.name || "Mapa sem nome";
         const meta = document.createElement("span");
         meta.textContent = map.cols + " x " + map.rows + " hexes - " + (map.style === "oldschool" ? "Old School" : "Moderno");
-        info.append(name, meta);
+        const updated = document.createElement("small");
+        updated.textContent = map.updatedAt ? new Date(map.updatedAt).toLocaleString("pt-BR") : "";
+        info.append(name, meta, updated);
+        const actions = document.createElement("div");
+        actions.className = "saved-map-actions";
         const open = document.createElement("button");
         open.textContent = map.id === state.mapId ? "Aberto" : "Abrir";
         open.disabled = map.id === state.mapId;
         open.addEventListener("click", () => {
-          const saved = MapPersistence.load(map.id);
           if (!saved) return;
           importState(saved);
           els.savedMapsModal.hidden = true;
         });
-        row.append(info, open);
+        const remove = document.createElement("button");
+        remove.className = "saved-map-delete";
+        remove.type = "button";
+        remove.title = "Excluir mapa salvo";
+        remove.setAttribute("aria-label", "Excluir " + (map.name || "Mapa sem nome"));
+        remove.innerHTML = '<i class="bi bi-trash3" aria-hidden="true"></i>';
+        remove.addEventListener("click", () => {
+          if (!window.confirm("Excluir o mapa salvo \"" + (map.name || "Mapa sem nome") + "\"?")) return;
+          const result = MapPersistence.remove(map.id);
+          if (result.ok) updateSavedMapList();
+        });
+        actions.append(open, remove);
+        row.append(thumbnail, info, actions);
         els.savedMapList.appendChild(row);
       });
     }
@@ -2056,6 +2129,16 @@ const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 
     function initControls() {
       els.toggleRightPanelBtn.innerHTML = '<i class="bi bi-chevron-right" aria-hidden="true"></i>';
+      const savedMapsDialog = els.savedMapsModal.querySelector("section");
+      savedMapsDialog.classList.add("saved-maps-dialog");
+      const savedMapsHeading = els.savedMapsModal.querySelector("h2");
+      savedMapsHeading.textContent = "Galeria de mapas";
+      const savedMapsSubtitle = document.createElement("p");
+      savedMapsSubtitle.className = "dialog-subtitle";
+      savedMapsSubtitle.textContent = "Abra, compare ou remova seus mapas salvos.";
+      const savedMapsTitle = document.createElement("div");
+      savedMapsTitle.append(savedMapsHeading, savedMapsSubtitle);
+      els.savedMapsModal.querySelector(".dialog-head").prepend(savedMapsTitle);
       makeSectionsCollapsible();
       populatePlaceTypes();
       buildTerrainPalette();

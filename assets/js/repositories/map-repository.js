@@ -32,5 +32,15 @@
     return SafeJsonStorage.write(libraryKey, Array.isArray(items) ? items : []);
   }
 
-  window.MapRepository = Object.freeze({ list, load, loadCurrent, save, saveLibrary });
+  function remove(id) {
+    if (!id) return { ok: false, error: new Error("Mapa sem identificador") };
+    try {
+      window.localStorage.removeItem(itemKey(id));
+    } catch (error) {
+      return { ok: false, error };
+    }
+    return saveLibrary(list().filter(item => item && item.id !== id));
+  }
+
+  window.MapRepository = Object.freeze({ list, load, loadCurrent, remove, save, saveLibrary });
 })();
