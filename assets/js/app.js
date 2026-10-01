@@ -21,7 +21,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     eraseSection.id = "eraseSection";
     eraseSection.className = "section context-section";
     eraseSection.hidden = true;
-    eraseSection.innerHTML = '<h2>Apagar somente</h2><div class="erase-targets"><label><input type="checkbox" data-erase="terrain" checked> Terreno</label><label><input type="checkbox" data-erase="relief" checked> Relevo</label><label><input type="checkbox" data-erase="places" checked> Lugares e notas</label><label><input type="checkbox" data-erase="roads" checked> Ruas</label><label><input type="checkbox" data-erase="rivers" checked> Rios</label><label><input type="checkbox" data-erase="texts" checked> Textos avulsos</label></div><p class="hint">Marque apenas o que deseja remover. Arraste para apagar vários hexes.</p>';
+    eraseSection.innerHTML = '<h2>Apagar somente</h2><div class="erase-targets"><label><input type="checkbox" data-erase="terrain" checked> Terreno</label><label><input type="checkbox" data-erase="relief" checked> Relevo</label><label><input type="checkbox" data-erase="places" checked> Lugares</label><label><input type="checkbox" data-erase="details" checked> Título e notas</label><label><input type="checkbox" data-erase="roads" checked> Ruas</label><label><input type="checkbox" data-erase="rivers" checked> Rios</label><label><input type="checkbox" data-erase="texts" checked> Textos avulsos</label></div><p class="hint">Marque apenas o que deseja remover. Arraste para apagar vários hexes.</p>';
     reliefSection.after(eraseSection);
     const roadStyleRow = document.createElement("div");
     roadStyleRow.className = "form-row";
@@ -82,41 +82,37 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         centerBtn: "bullseye"
       };
       Object.entries(icons).forEach(([id, icon]) => addButtonIcon(id, icon));
-      document.querySelectorAll("[data-tool]").forEach(button => {
-        const iconsByTool = { navigate: "arrows-move", paint: "brush", relief: "layers", place: "geo-alt", text: "type", road: "signpost-split", river: "water", erase: "eraser", select: "pencil-square" };
-        const shortcutsByTool = { navigate: "N", paint: "P", relief: "H", place: "L", text: "T", road: "E", river: "I", erase: "A", select: "D" };
-        const label = button.textContent.trim();
-        button.innerHTML = `<i class="bi bi-${iconsByTool[button.dataset.tool]}" aria-hidden="true"></i><span>${label}</span>`;
-        button.title += ` (${shortcutsByTool[button.dataset.tool]})`;
-      });
-      const toolGroups = [
-        ["Navegação", ["navigate", "select"]],
-        ["Criar", ["paint", "relief", "place", "text"]],
-        ["Traçados", ["road", "river"]],
-        ["Correção", ["erase"]]
-      ];
-      const grid = document.getElementById("toolGrid");
-      toolGroups.forEach(([label, tools]) => {
-        const group = document.createElement("div");
-        group.className = "tool-group";
-        const heading = document.createElement("div");
-        heading.className = "tool-group-title";
-        heading.textContent = label;
-        group.appendChild(heading);
-        const buttons = document.createElement("div");
-        buttons.className = "tool-group-buttons";
-        tools.forEach(tool => buttons.appendChild(grid.querySelector(`[data-tool="${tool}"]`)));
-        group.appendChild(buttons);
-        grid.appendChild(group);
-      });
     }
+    const toolMenu = ToolMenu.mount(document.getElementById("toolGrid"), document.getElementById("toolHint"));
 
-    const headerActions = document.createElement("div");
-    headerActions.className = "options-menu-actions";
-    ["saveBtn", "exportJsonBtn", "exportPngBtn", "importBtn", "importFile"].forEach(id => {
-      headerActions.appendChild(document.getElementById(id));
+    const optionsMenu = document.getElementById("optionsMenu");
+    const menuGroups = [
+      ["Projeto", ["menuNewMapBtn", "savedMapsBtn"]],
+      ["Aparência", ["mapOptionsBtn", "layersBtn", "legendBtn", "styleLibraryBtn"]],
+      ["Exportar e importar", ["exportPngBtn", "exportJsonBtn", "importBtn"]],
+      ["Ajuda", ["helpBtn"]]
+    ];
+    menuGroups.forEach(([label, ids]) => {
+      const group = document.createElement("div");
+      group.className = "options-menu-group";
+      const title = document.createElement("div");
+      title.className = "options-menu-group-title";
+      title.textContent = label;
+      group.appendChild(title);
+      ids.forEach(id => group.appendChild(document.getElementById(id)));
+      optionsMenu.appendChild(group);
     });
-    document.getElementById("optionsMenu").appendChild(headerActions);
+    optionsMenu.appendChild(document.getElementById("importFile"));
+    const optionsButton = document.getElementById("optionsBtn");
+    optionsButton.querySelector("span").textContent = "Menu";
+    optionsButton.setAttribute("aria-label", "Abrir menu do mapa");
+    optionsButton.setAttribute("aria-controls", "optionsMenu");
+    optionsButton.setAttribute("aria-expanded", "false");
+    new MutationObserver(() => {
+      const isOpen = !optionsMenu.hidden;
+      optionsButton.setAttribute("aria-expanded", String(isOpen));
+      optionsButton.setAttribute("aria-label", isOpen ? "Fechar menu do mapa" : "Abrir menu do mapa");
+    }).observe(optionsMenu, { attributes: true, attributeFilter: ["hidden"] });
 
     document.querySelector('label[for="selectedName"]').textContent = "Texto no mapa";
     const textScaleRow = document.createElement("label");
@@ -130,6 +126,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     duplicatePlaceBtn.textContent = "Duplicar local no hex vizinho";
     duplicatePlaceBtn.disabled = true;
     document.getElementById("applyDetailsBtn").after(duplicatePlaceBtn);
+    const hexDetails = HexDetailsPanel.mount(document.querySelector("#rightPanel > .section"));
     document.getElementById("mapTextSize").min = "6";
 
     function addPercentInput(rangeId) {
@@ -381,7 +378,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     }
     function cellAt(q, r) {
       const k = key(q, r);
-      if (!state.cells[k]) state.cells[k] = { terrain: "grass", showIcon: true, place: null, roads: [], rivers: [], notes: "", elevation: 0 };
+      if (!state.cells[k]) state.cells[k] = { terrain: "grass", showIcon: true, place: null, roads: [], rivers: [], title: "", notes: "", elevation: 0 };
       return state.cells[k];
     }
 
@@ -963,13 +960,16 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       }
       if (tool !== "paint") state.hoveredBrush = null;
       canvas.dataset.tool = tool;
-      document.querySelectorAll("[data-tool]").forEach(btn => btn.classList.toggle("active", btn.dataset.tool === tool));
       els.terrainSection.hidden = tool !== "paint";
       els.reliefSection.hidden = tool !== "relief";
       els.eraseSection.hidden = tool !== "erase";
       els.placeSection.hidden = tool !== "place";
       els.textSection.hidden = tool !== "text";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
+      if (tool === "road" || tool === "river") {
+        const title = els.pathAssistSection.querySelector(".section-toggle > span");
+        if (title) title.textContent = tool === "road" ? "Opções da rua" : "Opções do rio";
+      }
       els.roadOptionsSection.hidden = tool !== "road";
       els.riverOptionsSection.hidden = tool !== "river";
       if (tool === "road") state.snapToEdges = state.roadSnapToEdges;
@@ -977,17 +977,27 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       if (tool === "road" || tool === "river") (tool === "road" ? els.roadOptionsSection : els.riverOptionsSection).appendChild(roadWidthRow);
       state.selectExistingPaths = tool === "road" ? state.roadSelectExisting : tool === "river" ? state.riverSelectExisting : false;
       els.editLabelSection.hidden = tool !== "select";
-      els.toolHint.textContent = tool === "navigate"
-        ? "Arraste para navegar pelo mapa. Esta ferramenta não seleciona nem altera elementos."
-        : tool === "relief"
-          ? "Clique ou arraste para aplicar a altura escolhida aos hexes."
-          : tool === "select"
-            ? "Clique para editar ou arraste um local. Ctrl/Cmd+C copia; selecione um hex vazio e use Ctrl/Cmd+V."
-            : tool === "text"
-              ? "Clique para criar ou arraste para mover. Duplo clique edita no mapa; Ctrl/Cmd+V duplica."
-            : tool === "erase"
-              ? "Marque os tipos abaixo e clique ou arraste no mapa para apagar somente eles."
-            : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
+      const descriptions = {
+        navigate: "Arraste o mapa para explorar sem alterar elementos.",
+        select: "Clique em um hex para editar. Arraste um local para movê-lo.",
+        erase: "Marque abaixo o que deseja apagar e clique ou arraste no mapa.",
+        paint: "Escolha um terreno abaixo e pinte clicando ou arrastando.",
+        relief: "Escolha a altura abaixo e aplique nos hexes.",
+        place: "Escolha um ícone abaixo e clique no hex onde deseja colocá-lo.",
+        text: "Clique para criar. Arraste para mover; duplo clique edita o texto no mapa.",
+        road: "Arraste para desenhar uma rua. Marque Selecionar para editar uma existente.",
+        river: "Arraste para desenhar um rio. Marque Selecionar para editar um existente."
+      };
+      toolMenu.update(tool, descriptions[tool]);
+      const activeSection = {
+        paint: els.terrainSection, relief: els.reliefSection, place: els.placeSection,
+        text: els.textSection, road: els.pathAssistSection, river: els.pathAssistSection,
+        erase: els.eraseSection, select: els.editLabelSection
+      }[tool];
+      if (activeSection) {
+        activeSection.classList.remove("is-collapsed");
+        activeSection.querySelector(".section-toggle")?.setAttribute("aria-expanded", "true");
+      }
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
       if (tool === "place") renderPlaceDraftEditor();
@@ -995,16 +1005,31 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     }
 
     function makeSectionsCollapsible() {
-      document.querySelectorAll("aside .section > h2").forEach(heading => {
+      const icons = {
+        terrainSection: "brush", reliefSection: "layers", placeSection: "geo-alt",
+        textSection: "type", pathAssistSection: "signpost-split", eraseSection: "eraser",
+        editLabelSection: "tag"
+      };
+      document.querySelectorAll("aside .section:not(.tool-menu-section) > h2").forEach((heading, index) => {
         const section = heading.parentElement;
         const content = document.createElement("div");
         content.className = "section-content";
+        content.id = (section.id || "panelSection" + index) + "Content";
         while (heading.nextSibling) content.appendChild(heading.nextSibling);
         const button = document.createElement("button");
         button.type = "button";
         button.className = "section-toggle";
-        button.textContent = heading.textContent;
+        if (icons[section.id]) {
+          const icon = document.createElement("i");
+          icon.className = "bi bi-" + icons[section.id];
+          icon.setAttribute("aria-hidden", "true");
+          button.appendChild(icon);
+        }
+        const title = document.createElement("span");
+        title.textContent = heading.textContent;
+        button.appendChild(title);
         button.setAttribute("aria-expanded", "true");
+        button.setAttribute("aria-controls", content.id);
         button.addEventListener("click", () => {
           const collapsed = section.classList.toggle("is-collapsed");
           button.setAttribute("aria-expanded", String(!collapsed));
@@ -1166,7 +1191,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         const targets = state.eraseTargets;
         cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
           const cell = cellAt(brushQ, brushR);
-          if (targets.places) { cell.place = null; cell.notes = ""; }
+          if (targets.places) cell.place = null;
+          if (targets.details) { cell.title = ""; cell.notes = ""; }
           if (targets.terrain) { cell.terrain = "grass"; cell.showIcon = true; }
           if (targets.relief) cell.elevation = 0;
           if (targets.roads || targets.rivers) removeCellConnections(brushQ, brushR, targets);
@@ -1256,8 +1282,18 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       startFreePath, startPathFromEndpoint, updateSelectionUi: updatePathSelectionUi
     } = pathTools;
 
+    function updatePlaceFields() {
+      const selectedCell = state.selected ? cellAt(state.selected.q, state.selected.r) : null;
+      const hasType = Boolean(els.selectedType.value);
+      els.selectedName.disabled = !hasType;
+      els.selectedTextScale.disabled = !hasType;
+      els.selectedTextScaleInput.disabled = !hasType;
+      els.applyDetailsBtn.disabled = !selectedCell || (!hasType && !selectedCell.place);
+    }
+
     function syncDetails() {
       if (!state.selected) {
+        hexDetails.sync(null);
         els.duplicatePlaceBtn.disabled = true;
         els.selectedCoord.value = "-";
         els.selectedName.value = "";
@@ -1266,11 +1302,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         els.selectedTextScaleValue.textContent = "100%";
         els.selectedType.value = "";
         els.selectedNotes.value = "";
+        updatePlaceFields();
         if (state.tool === "select") renderSelectedLabelEditor();
         return;
       }
       const { q, r } = state.selected;
       const cell = cellAt(q, r);
+      hexDetails.sync({ key: key(q, r), title: cell.title, notes: cell.notes });
       els.duplicatePlaceBtn.disabled = !cell.place || !neighborEdges(q, r).some(({ q: nq, r: nr }) => nq >= 0 && nr >= 0 && nq < state.cols && nr < state.rows && !state.cells[key(nq, nr)]?.place);
       els.selectedCoord.value = q + ", " + r;
       els.selectedName.value = cell.place ? cell.place.name : "";
@@ -1279,7 +1317,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.selectedTextScaleInput.value = textScale;
       els.selectedTextScaleValue.textContent = textScale + "%";
       els.selectedType.value = cell.place ? cell.place.type : "";
-      els.selectedNotes.value = cell.notes || "";
+      updatePlaceFields();
       if (state.tool === "select") renderSelectedLabelEditor();
     }
 
@@ -1322,8 +1360,10 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const cell = cellAt(q, r);
       const name = els.selectedName.value.trim();
       const type = els.selectedType.value;
+      cell.title = hexDetails.titleInput.value;
       cell.notes = els.selectedNotes.value;
       cell.place = type ? { ...cell.place, name, type, textScale: Number(els.selectedTextScale.value) / 100 } : null;
+      syncDetails();
       updatePlaces();
       scheduleSave();
       draw();
@@ -1794,6 +1834,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const project = exportState();
       const result = MapPersistence.save(project);
       els.saveStatus.textContent = result.ok ? "Salvo neste navegador" : "Nao foi possivel salvar neste navegador";
+      hexDetails.markSaved(result.ok);
     }
 
     function loadLocal() {
@@ -2310,6 +2351,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     function handleToolShortcut(event) {
       const target = event.target;
       if (event.key === "Escape") {
+        const menuWasOpen = !els.optionsMenu.hidden;
+        els.optionsMenu.hidden = true;
+        if (menuWasOpen) { event.preventDefault(); els.optionsBtn.focus(); }
         document.querySelectorAll(".modal:not([hidden])").forEach(modal => { modal.hidden = true; });
         return;
       }
@@ -2375,6 +2419,15 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     }
 
     function initControls() {
+      hexDetails.bindSave((field, value, startSession) => {
+        if (!state.selected) return false;
+        const cell = cellAt(state.selected.q, state.selected.r);
+        if (cell[field] === value) return false;
+        if (startSession) recordHistory();
+        cell[field] = value;
+        scheduleSave();
+        return true;
+      });
       els.toggleRightPanelBtn.innerHTML = '<i class="bi bi-chevron-right" aria-hidden="true"></i>';
       const savedMapsDialog = els.savedMapsModal.querySelector("section");
       savedMapsDialog.classList.add("saved-maps-dialog");
@@ -2407,6 +2460,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.selectedTextScale.addEventListener("input", () => {
         els.selectedTextScaleValue.textContent = els.selectedTextScale.value + "%";
       });
+      els.selectedType.addEventListener("change", updatePlaceFields);
       els.brushSize.addEventListener("input", () => {
         state.brushSize = Number(els.brushSize.value);
         els.brushSizeValue.textContent = state.brushSize + (state.brushSize === 1 ? " hex" : " hexes");
@@ -2638,11 +2692,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       canvas, state, key, pixelToHex, pixelToWorld, worldToPixel,
       findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, editMapTextAt, moveMapText, eraseMapTextNear,
       recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection,
-      setTool, syncDetails, setZoom, focusSelectedName: () => els.selectedName.focus(), resizeCanvas
+      setTool, syncDetails, setZoom, focusSelectedName: () => hexDetails.titleInput.focus(),
+      showSelectedPanel: () => { if (els.rightPanel.classList.contains("is-minimized")) toggleRightPanel(); },
+      resizeCanvas
     });
 
     initControls();
     loadLocal();
+    setTool(state.tool);
     resizeCanvas();
     centerMap();
     syncDetails();

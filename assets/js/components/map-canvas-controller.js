@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, editMapTextAt, moveMapText, eraseMapTextNear, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
+  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, editMapTextAt, moveMapText, eraseMapTextNear, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, showSelectedPanel, resizeCanvas }) {
+    let pendingSelectedHex = false;
     function pointerPos(event) {
       const rect = canvas.getBoundingClientRect();
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -11,7 +12,7 @@
       const targets = state.eraseTargets;
       if (targets.texts && eraseMapTextNear(pos)) { state.activePathKey = cell && key(cell.q, cell.r); return; }
       if ((targets.roads || targets.rivers) && eraseFreePathsNear(pos, targets)) { state.activePathKey = cell && key(cell.q, cell.r); return; }
-      if (!cell || !["terrain", "relief", "places", "roads", "rivers"].some(type => targets[type])) return;
+      if (!cell || !["terrain", "relief", "places", "details", "roads", "rivers"].some(type => targets[type])) return;
       const cellKey = key(cell.q, cell.r);
       if (cellKey === state.activePathKey) return;
       state.activePathKey = cellKey;
@@ -78,6 +79,7 @@
           return;
         }
         handleCell(cell);
+        if (state.tool === "select" && cell) pendingSelectedHex = true;
       }
     });
 
@@ -164,6 +166,10 @@
       state.textDrag = null;
       state.placeDrag = null;
       state.activePathKey = null;
+      if (pendingSelectedHex) {
+        pendingSelectedHex = false;
+        showSelectedPanel();
+      }
       if (wasRightClick) clearPathSelection();
     }
 
@@ -186,6 +192,7 @@
         state.selected = cell;
         setTool("select");
         syncDetails();
+        showSelectedPanel();
         draw();
         focusSelectedName();
       }

@@ -21,7 +21,7 @@
       terrain: "grass",
       paintShowIcon: true,
       brushSize: 1,
-      eraseTargets: { terrain: true, relief: true, places: true, roads: true, rivers: true, texts: true },
+      eraseTargets: { terrain: true, relief: true, places: true, details: true, roads: true, rivers: true, texts: true },
       borderColor: "#77664b",
       terrainIconScale: 1,
       terrainIconScales: {},
