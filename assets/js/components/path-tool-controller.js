@@ -17,20 +17,26 @@
       els.pathSelectionHint.textContent = path
         ? (path.type === "river" ? "Rio selecionado." : "Rua selecionada.") + " Arraste-o para mover. Puxe uma bolinha na direção do traço para encurtá-lo, ou para fora para continuar."
         : state.currentPath
-          ? (state.currentPath.type === "river" ? "Continuando o rio." : "Continuando a rua.") + " Arraste para adicionar novos pontos."
+          ? (state.currentPath.type === "river" ? "Continuando o rio." : "Continuando a rua.") + (state.drawPathByClicks ? " Clique para adicionar pontos; duplo clique para terminar." : " Arraste para adicionar novos pontos.")
           : state.selectExistingPaths
             ? "Clique em um desenho para selecioná-lo. Clique em uma área vazia para iniciar um novo traço."
-            : "Modo de desenho ativo. Marque “Selecionar” para editar um traçado existente.";
+            : state.drawPathByClicks
+              ? "Clique para iniciar e adicionar pontos; duplo clique para terminar."
+              : "Modo de desenho ativo. Marque “Selecionar” para editar um traçado existente.";
     }
 
     function startFreePath(pos) {
       const selected = state.paths[state.selectedPathIndex];
       const useEdges = selected && selected.type === state.tool ? Boolean(selected.snapToEdges) : state.snapToEdges;
-      const snapped = snapPathPoint(pos, useEdges);
+      const useCenters = selected && selected.type === state.tool
+        ? (selected.snapToCenters === undefined ? !useEdges : Boolean(selected.snapToCenters))
+        : state.snapToCenters;
+      const snapped = useEdges || useCenters ? snapPathPoint(pos, useEdges) : pos;
       const point = pixelToWorld(snapped.x, snapped.y);
       if (selected && selected.type === state.tool) {
         recordHistory();
         state.currentPath = state.paths.splice(state.selectedPathIndex, 1)[0];
+        state.currentPath.snapToCenters = useCenters;
         state.selectedPathIndex = null;
         const last = state.currentPath.points[state.currentPath.points.length - 1];
         if (Math.hypot(point[0] - last[0], point[1] - last[1]) > .16) state.currentPath.points.push(point);
@@ -42,8 +48,8 @@
           style: state.tool === "road" ? state.roadStyle : undefined,
           color: state.tool === "road" ? state.roadColor : undefined,
           width: state.roadWidth,
-          snapToEdges: state.snapToEdges,
-          snapToCenters: !state.snapToEdges,
+          snapToEdges: useEdges,
+          snapToCenters: useCenters,
           points: [point]
         };
         state.pathContinuation = null;
@@ -54,7 +60,9 @@
 
     function addFreePathPoint(pos) {
       if (!state.currentPath) return;
-      const snapped = snapPathPoint(pos, state.currentPath.snapToEdges);
+      const useEdges = Boolean(state.currentPath.snapToEdges);
+      const useCenters = state.currentPath.snapToCenters === undefined ? !useEdges : Boolean(state.currentPath.snapToCenters);
+      const snapped = useEdges || useCenters ? snapPathPoint(pos, useEdges) : pos;
       const point = pixelToWorld(snapped.x, snapped.y);
       const points = state.currentPath.points;
       const last = points[points.length - 1];

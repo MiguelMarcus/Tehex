@@ -272,6 +272,7 @@
     .palette-group h3 { margin: 0 0 7px; color: #5e4320; font-size: 12px; }
     .icon-choice { min-height: 36px; padding: 5px 7px; font-size: 12px; }
     .icon-choice img { width: 22px; height: 22px; object-fit: contain; }
+      .icon-choice[data-no-icon="true"]::before { content: ""; width: 22px; height: 22px; flex: 0 0 22px; border: 1px solid var(--choice-edge); border-radius: 4px; background: var(--choice-color); }
     .paint-options { display: grid; gap: 8px; margin-top: 12px; }
     .range-row { display: grid; gap: 5px; color: #5e5141; font-size: 12px; font-weight: 700; }
     .range-row input { padding: 0; accent-color: var(--accent); }

@@ -65,6 +65,12 @@
             return;
           }
         }
+        if (state.drawPathByClicks) {
+          if (state.currentPath && state.currentPath.type === state.tool) addFreePathPoint(pos);
+          else startFreePath(pos);
+          state.isPainting = false;
+          return;
+        }
         startFreePath(pos);
       } else {
         const cell = pixelToHex(pos.x, pos.y);
@@ -153,10 +159,11 @@
 
     function finishPointer(event) {
       const wasRightClick = event && event.button === 2 && state.panStart && Math.hypot(event.clientX - state.panStart.x, event.clientY - state.panStart.y) < 5;
-      if (event && (event.type === "pointercancel" || event.type === "lostpointercapture")) {
+      const clickDrawing = state.drawPathByClicks && ["road", "river"].includes(state.tool);
+      if (event && (event.type === "pointercancel" || (event.type === "lostpointercapture" && !clickDrawing))) {
         state.currentPath = null;
         state.pathContinuation = null;
-      } else {
+      } else if (!clickDrawing) {
         finishFreePath();
       }
       state.isPainting = false;
@@ -185,6 +192,10 @@
 
     canvas.addEventListener("dblclick", event => {
       if (state.tool === "navigate") return;
+      if ((state.tool === "road" || state.tool === "river") && state.drawPathByClicks) {
+        finishFreePath();
+        return;
+      }
       const pos = pointerPos(event);
       if (state.tool === "text") { editMapTextAt(pos); return; }
       const cell = pixelToHex(pos.x, pos.y);

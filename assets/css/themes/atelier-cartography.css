@@ -1,17 +1,17 @@
 :root {
-  --ink: #1c1c19;
-  --muted: #424842;
-  --text-secondary: #7d6b58;
-  --paper: #faf8f5;
-  --panel: #ffffff;
-  --line: #e6e2dc;
-  --accent: #435e47;
-  --accent-dark: #364c39;
-  --accent-soft: #eae5de;
-  --focus: rgba(67, 94, 71, .16);
-  --surface: #ffffff;
-  --surface-muted: #f3efea;
-  --surface-hover: #f3efea;
+  --ink: #292d30;
+  --muted: #66645e;
+  --text-secondary: #796e60;
+  --paper: #e9e6df;
+  --panel: #fbfaf6;
+  --line: #d8d0c4;
+  --accent: #925044;
+  --accent-dark: #713d36;
+  --accent-soft: #eee5d9;
+  --focus: rgba(146, 80, 68, .18);
+  --surface: #fffefa;
+  --surface-muted: #f2eee6;
+  --surface-hover: #eee8dc;
   --radius-sm: 4px;
   --radius: 8px;
   --shadow-sm: 0 2px 8px -2px rgba(38, 37, 34, .06), 0 1px 2px rgba(38, 37, 34, .04);
@@ -30,7 +30,7 @@ body {
 }
 
 h1, h2, h3, .brand h1, .section h2, .section-toggle {
-  font-family: Manrope, Inter, sans-serif;
+  font-family: Alegreya, Georgia, serif;
   color: var(--ink);
 }
 

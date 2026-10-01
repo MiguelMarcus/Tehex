@@ -24,3 +24,28 @@ test("eraser respects separate road and river filters", () => {
   assert.equal(controller.eraseNear({}, { roads: false, rivers: true }), false);
   assert.equal(saves, 1);
 });
+
+test("paths can snap to centers, edges, or remain freehand", () => {
+  function startPath(snapToCenters, snapToEdges) {
+    const context = { window: {}, MapPathGeometry: { findPathAt: () => -1, findPathEndpointAt: () => null } };
+    vm.runInNewContext(fs.readFileSync(require.resolve("../assets/js/components/path-tool-controller.js"), "utf8"), context);
+    const state = {
+      tool: "road", paths: [], selectedPathIndex: null, hexSize: 31, scale: 1,
+      snapToCenters, snapToEdges, roadStyle: "simple", roadColor: "#b78b4b", roadWidth: 1
+    };
+    const controller = context.window.PathToolController.create({
+      state,
+      els: { deleteSelectedPathBtn: {}, pathSelectionHint: {} },
+      pixelToWorld: (x, y) => [x, y],
+      snapPathPoint: (point, useEdges) => useEdges ? { x: point.x * 10, y: point.y * 10 } : { x: Math.round(point.x), y: Math.round(point.y) },
+      worldToPixel: point => ({ x: point[0], y: point[1] }),
+      recordHistory: () => {}, scheduleSave: () => {}, draw: () => {}
+    });
+    controller.startFreePath({ x: 1.4, y: .4 });
+    return Array.from(state.currentPath.points[0]);
+  }
+
+  assert.deepEqual(startPath(true, false), [1, 0]);
+  assert.deepEqual(startPath(false, true), [14, 4]);
+  assert.deepEqual(startPath(false, false), [1.4, .4]);
+});

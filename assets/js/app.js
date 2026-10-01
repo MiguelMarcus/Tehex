@@ -1,4 +1,5 @@
 const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
+const MapIsland = window.MapIsland;
 const landmarkPlaceTypes = new Set(["temple", "ruins", "mine", "pier", "bridge", "signpost", "galleon", "dolmen", "mayanPyramid", "totem", "axeInStump", "grainBundle", "chest", "campfire", "twoCoins", "horseshoe", "danger", "diabloSkull", "deathSkull", "tombstone", "graveyard"]);
 const settlementPlaceTypes = new Set(["settlement", "medievalVillage", "hut", "house", "camp", "goblinCamp", "church", "windmill"]);
 const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTower", "woodenDoor"]);
@@ -23,6 +24,18 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     eraseSection.hidden = true;
     eraseSection.innerHTML = '<h2>Apagar somente</h2><div class="erase-targets"><label><input type="checkbox" data-erase="terrain" checked> Terreno</label><label><input type="checkbox" data-erase="relief" checked> Relevo</label><label><input type="checkbox" data-erase="places" checked> Lugares</label><label><input type="checkbox" data-erase="details" checked> Título e notas</label><label><input type="checkbox" data-erase="roads" checked> Ruas</label><label><input type="checkbox" data-erase="rivers" checked> Rios</label><label><input type="checkbox" data-erase="texts" checked> Textos avulsos</label></div><p class="hint">Marque apenas o que deseja remover. Arraste para apagar vários hexes.</p>';
     reliefSection.after(eraseSection);
+    const islandOptionsRow = document.createElement("div");
+    islandOptionsRow.id = "islandOptionsRow";
+    islandOptionsRow.className = "form-row";
+    islandOptionsRow.innerHTML = '<label for="islandClusterCount">Formação</label><select id="islandClusterCount"><option value="1">Ilha única</option><option value="2">2 ilhotas</option><option value="3">3 ilhotas</option></select>';
+    document.getElementById("terrainGrid").after(islandOptionsRow);
+    const centerSnapRow = document.createElement("div");
+    centerSnapRow.className = "toggle-row";
+    centerSnapRow.innerHTML = '<input id="snapPathToCenters" type="checkbox" checked><label for="snapPathToCenters">Encaixar no centro dos hexes</label>';
+    const clickDrawingRow = document.createElement("div");
+    clickDrawingRow.className = "toggle-row";
+    clickDrawingRow.innerHTML = '<input id="drawPathByClicks" type="checkbox"><label for="drawPathByClicks" title="Clique para iniciar, adicionar pontos e dê duplo clique para terminar">Desenhar por cliques</label>';
+    document.getElementById("pathSelectionHint").before(centerSnapRow, clickDrawingRow);
     const roadStyleRow = document.createElement("div");
     roadStyleRow.className = "form-row";
     roadStyleRow.innerHTML = '<label for="roadStyle">Estilo</label><select id="roadStyle"><option value="trail">Trilha</option><option value="simple" selected>Estrada simples</option><option value="main">Estrada principal</option></select>';
@@ -196,6 +209,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     const els = {
       terrainGrid: document.getElementById("terrainGrid"),
+      islandOptionsRow: document.getElementById("islandOptionsRow"),
+      islandClusterCount: document.getElementById("islandClusterCount"),
       paintShowIcon: document.getElementById("paintShowIcon"),
       brushSize: document.getElementById("brushSize"),
       brushSizeValue: document.getElementById("brushSizeValue"),
@@ -252,6 +267,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       placeIconScaleLabel: document.getElementById("placeIconScaleLabel"),
       roadSnapToEdges: document.getElementById("roadSnapToEdges"),
       riverSnapToEdges: document.getElementById("riverSnapToEdges"),
+      snapPathToCenters: document.getElementById("snapPathToCenters"),
+      drawPathByClicks: document.getElementById("drawPathByClicks"),
       roadSelectExisting: document.getElementById("roadSelectExisting"),
       riverSelectExisting: document.getElementById("riverSelectExisting"),
       roadStyle: document.getElementById("roadStyle"),
@@ -651,10 +668,15 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       ctx.fillStyle = state.layers.terrain ? shade(baseColor, variation) : (isOldSchool() ? "#eeeeee" : "#efe9de");
       ctx.fill(path);
       if (quality === "detail") drawPaperTexture(q, r, p.x, p.y, size);
+      if (state.layers.terrain && typeof cell.islandSeed === "number" && ["water", "ocean"].includes(terrain.id)) {
+        const land = terrainById("grass");
+        const landColor = isOldSchool() ? oldSchoolTerrainColor(land) : displayColor(land.color);
+        MapIsland.draw(ctx, p.x, p.y, size, cell.islandSeed, shade(landColor, variation), isOldSchool() ? "#777777" : land.edge, Math.max(.5, .75 * state.scale), cell.islandCount || 1);
+      }
       const isLargeMap = !state.isExporting && state.cols * state.rows > 40 * 40;
       const iconDensity = isLargeMap ? .2 : quality === "standard" ? .5 : 1;
       const previewIcon = quality !== "overview" && hash(q, r, 703) < iconDensity;
-      if (state.layers.terrainIcons && previewIcon && cell.showIcon !== false && !(isOldSchool() && terrain.id === "grass")) {
+      if (state.layers.terrainIcons && previewIcon && cell.showIcon !== false && cell.islandSeed === undefined && !(isOldSchool() && terrain.id === "grass")) {
         const iconQualityScale = isLargeMap ? .72 : quality === "detail" ? 1 : .7;
         const iconOpacity = isLargeMap ? .46 : .78;
         drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * iconQualityScale * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), iconOpacity);
@@ -951,6 +973,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     }
 
     function setTool(tool) {
+      if (state.currentPath && state.currentPath.type !== tool) finishFreePath();
       state.tool = tool;
       state.lastPathCell = null;
       state.activePathKey = null;
@@ -972,8 +995,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       }
       els.roadOptionsSection.hidden = tool !== "road";
       els.riverOptionsSection.hidden = tool !== "river";
-      if (tool === "road") state.snapToEdges = state.roadSnapToEdges;
-      if (tool === "river") state.snapToEdges = state.riverSnapToEdges;
+      syncActivePathSnapMode();
       if (tool === "road" || tool === "river") (tool === "road" ? els.roadOptionsSection : els.riverOptionsSection).appendChild(roadWidthRow);
       state.selectExistingPaths = tool === "road" ? state.roadSelectExisting : tool === "river" ? state.riverSelectExisting : false;
       els.editLabelSection.hidden = tool !== "select";
@@ -985,10 +1007,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         relief: "Escolha a altura abaixo e aplique nos hexes.",
         place: "Escolha um ícone abaixo e clique no hex onde deseja colocá-lo.",
         text: "Clique para criar. Arraste para mover; duplo clique edita o texto no mapa.",
-        road: "Arraste para desenhar uma rua. Marque Selecionar para editar uma existente.",
-        river: "Arraste para desenhar um rio. Marque Selecionar para editar um existente."
+        road: state.drawPathByClicks ? "Clique para iniciar e adicionar pontos; duplo clique termina a rua." : "Arraste para desenhar uma rua.",
+        river: state.drawPathByClicks ? "Clique para iniciar e adicionar pontos; duplo clique termina o rio." : "Arraste para desenhar um rio."
       };
-      toolMenu.update(tool, descriptions[tool]);
       const activeSection = {
         paint: els.terrainSection, relief: els.reliefSection, place: els.placeSection,
         text: els.textSection, road: els.pathAssistSection, river: els.pathAssistSection,
@@ -1002,6 +1023,18 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       if (tool === "select") renderSelectedLabelEditor();
       if (tool === "place") renderPlaceDraftEditor();
       draw();
+    }
+
+    function syncActivePathSnapMode() {
+      if (state.tool !== "road" && state.tool !== "river") return;
+      const prefix = state.tool === "road" ? "road" : "river";
+      state.snapToEdges = state[prefix + "SnapToEdges"];
+      state.snapToCenters = state[prefix + "SnapToCenters"];
+      els.snapPathToCenters.checked = state.snapToCenters;
+      if (state.currentPath && state.currentPath.type === state.tool) {
+        state.currentPath.snapToEdges = state.snapToEdges;
+        state.currentPath.snapToCenters = state.snapToCenters;
+      }
     }
 
     function makeSectionsCollapsible() {
@@ -1059,6 +1092,11 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     function updateTerrainScaleControl() {
       const terrain = terrainById(state.terrain);
       const group = terrainGroupFor(terrain.id);
+      const isIsland = terrain.id === "island";
+      els.islandOptionsRow.hidden = !isIsland;
+      els.islandClusterCount.value = String(state.islandClusterCount);
+      els.terrainIconScale.closest(".range-row").hidden = isIsland;
+      els.paintShowIcon.closest(".toggle-row").hidden = isIsland;
       const value = Math.round((state.terrainIconScales[group.id] || state.terrainIconScales[terrain.id] || state.terrainIconScale) * 100);
       els.terrainIconScaleLabel.textContent = "Tamanho dos icones de " + group.name;
       els.terrainIconScale.value = value;
@@ -1121,8 +1159,16 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       button.className = "terrain icon-choice";
       button.dataset[attribute] = item.id;
       button.innerHTML = '<img alt=""><span></span>';
-      button.querySelector("img").src = item.icon;
-      button.querySelector("img").alt = item.name || item.label;
+      const icon = button.querySelector("img");
+      if (item.icon) {
+        icon.src = item.icon;
+        icon.alt = item.name || item.label;
+      } else {
+        button.dataset.noIcon = "true";
+        button.style.setProperty("--choice-color", item.color);
+        button.style.setProperty("--choice-edge", item.edge || item.color);
+        icon.remove();
+      }
       button.querySelector("span").textContent = item.name || item.label;
       button.addEventListener("click", onClick);
       return button;
@@ -1177,8 +1223,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       if (state.tool === "paint") {
         cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
           const cell = cellAt(brushQ, brushR);
-          cell.terrain = state.terrain;
-          cell.showIcon = state.paintShowIcon;
+          if (state.terrain === "island") {
+            MapIsland.paintCell(cell, Math.floor(Math.random() * 4294967296), state.islandClusterCount);
+          } else {
+            MapIsland.clearCell(cell);
+            cell.terrain = state.terrain;
+            cell.showIcon = state.paintShowIcon;
+          }
         });
       } else if (state.tool === "place") {
         const cell = cellAt(q, r);
@@ -1193,7 +1244,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           const cell = cellAt(brushQ, brushR);
           if (targets.places) cell.place = null;
           if (targets.details) { cell.title = ""; cell.notes = ""; }
-          if (targets.terrain) { cell.terrain = "grass"; cell.showIcon = true; }
+          if (targets.terrain) { MapIsland.clearCell(cell); cell.terrain = "grass"; cell.showIcon = true; }
           if (targets.relief) cell.elevation = 0;
           if (targets.roads || targets.rivers) removeCellConnections(brushQ, brushR, targets);
         });
@@ -1453,6 +1504,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           context.closePath();
           context.fillStyle = terrainColors[cell.terrain] || terrainColors.grass || "#9cab58";
           context.fill();
+          if (typeof cell.islandSeed === "number" && ["water", "ocean"].includes(cell.terrain)) {
+            MapIsland.draw(context, centerX, centerY, radius, cell.islandSeed, terrainColors.grass || "#9cab58", "#81954d", .5, cell.islandCount || 1);
+          }
           context.stroke();
           if (cell.place) {
             context.fillStyle = "#f7e6ae";
@@ -1597,9 +1651,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         mapId: state.mapId,
         mapName: state.mapName,
         mapStyle: state.mapStyle,
+        islandClusterCount: state.islandClusterCount,
         snapToEdges: state.snapToEdges,
         roadSnapToEdges: state.roadSnapToEdges,
         riverSnapToEdges: state.riverSnapToEdges,
+        roadSnapToCenters: state.roadSnapToCenters,
+        riverSnapToCenters: state.riverSnapToCenters,
+        drawPathByClicks: state.drawPathByClicks,
         roadSelectExisting: state.roadSelectExisting,
         riverSelectExisting: state.riverSelectExisting,
         roadStyle: state.roadStyle,
@@ -1684,6 +1742,10 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.snapToEdges = Boolean(data.snapToEdges);
       state.roadSnapToEdges = Boolean(data.roadSnapToEdges ?? data.snapToEdges);
       state.riverSnapToEdges = Boolean(data.riverSnapToEdges ?? data.snapToEdges);
+      state.roadSnapToCenters = !state.roadSnapToEdges && data.roadSnapToCenters !== false;
+      state.riverSnapToCenters = !state.riverSnapToEdges && data.riverSnapToCenters !== false;
+      state.drawPathByClicks = Boolean(data.drawPathByClicks);
+      state.islandClusterCount = [2, 3].includes(Number(data.islandClusterCount)) ? Number(data.islandClusterCount) : 1;
       state.roadSelectExisting = Boolean(data.roadSelectExisting);
       state.riverSelectExisting = Boolean(data.riverSelectExisting);
       state.roadStyle = ["trail", "simple", "main"].includes(data.roadStyle) ? data.roadStyle : "simple";
@@ -1692,8 +1754,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.reliefLevel = Math.max(0, Math.min(3, Number(data.reliefLevel ?? 1)));
       state.layers = { ...defaultLayers(), ...(data.layers || {}) };
       state.legendNotes = typeof data.legendNotes === "string" ? data.legendNotes : "";
-      if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
-      if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
+      if (state.tool === "road") {
+        state.snapToEdges = state.roadSnapToEdges;
+        state.snapToCenters = state.roadSnapToCenters;
+      }
+      if (state.tool === "river") {
+        state.snapToEdges = state.riverSnapToEdges;
+        state.snapToCenters = state.riverSnapToCenters;
+      }
       state.selectExistingPaths = state.tool === "road" ? state.roadSelectExisting : state.tool === "river" ? state.riverSelectExisting : false;
       state.brushSize = Math.max(1, Math.min(4, Number(data.brushSize) || 1));
       state.borderColor = borderColors.includes(data.borderColor) ? data.borderColor : "#77664b";
@@ -1705,9 +1773,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.rows = rows;
       state.cells = data.cells || {};
       const legacyGeometry = Number(data.geometryVersion) < 2;
-      state.paths = legacyGeometry
+      const restoredPaths = legacyGeometry
         ? paths.map(path => ({ ...path, points: path.points.map(MapGeometry.migratePointFromPointyGrid) }))
         : paths;
+      state.paths = restoredPaths.map(path => {
+        const snapToEdges = Boolean(path.snapToEdges);
+        const snapToCenters = path.snapToCenters === undefined ? path.smooth ? false : !snapToEdges : Boolean(path.snapToCenters);
+        return { ...path, snapToEdges, snapToCenters };
+      });
       state.texts = Array.isArray(data.texts)
         ? data.texts.map(item => legacyGeometry ? { ...item, point: MapGeometry.migratePointFromPointyGrid(item.point) } : item)
         : [];
@@ -1722,6 +1795,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.snapPathToCenters.checked = state.tool === "river" ? state.riverSnapToCenters : state.roadSnapToCenters;
+      els.drawPathByClicks.checked = state.drawPathByClicks;
+      els.islandClusterCount.value = String(state.islandClusterCount);
       els.roadSelectExisting.checked = state.roadSelectExisting;
       els.riverSelectExisting.checked = state.riverSelectExisting;
       els.roadStyle.value = state.roadStyle;
@@ -1765,8 +1841,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.mapName = data.name || "Mapa Hex Local";
       state.mapStyle = "modern";
       state.snapToEdges = false;
+      state.snapToCenters = true;
       state.roadSnapToEdges = false;
       state.riverSnapToEdges = false;
+      state.roadSnapToCenters = true;
+      state.riverSnapToCenters = true;
+      state.drawPathByClicks = false;
+      state.islandClusterCount = 1;
       state.roadSelectExisting = false;
       state.riverSelectExisting = false;
       state.selectExistingPaths = false;
@@ -1811,6 +1892,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.snapPathToCenters.checked = true;
+      els.drawPathByClicks.checked = false;
+      els.islandClusterCount.value = "1";
       els.roadSelectExisting.checked = false;
       els.riverSelectExisting.checked = false;
       els.roadStyle.value = state.roadStyle;
@@ -1870,6 +1954,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const usedPlaces = new Set();
       Object.values(state.cells).forEach(cell => {
         if (cell.terrain) usedTerrains.add(cell.terrain);
+        if (typeof cell.islandSeed === "number" && ["water", "ocean"].includes(cell.terrain)) usedTerrains.add("island");
         if (cell.place?.type) usedPlaces.add(cell.place.type);
       });
       if (state.layers.terrain) {
@@ -2089,7 +2174,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const rect = canvas.getBoundingClientRect();
       const naturalW = state.hexSize * (1.5 * (state.cols - 1) + 2);
       const naturalH = state.hexSize * Math.sqrt(3) * (state.rows + .5);
-      state.scale = Math.max(.38, Math.min(1, (rect.width - 48) / naturalW, (rect.height - 48) / naturalH));
+      const padding = Math.min(112, Math.max(44, Math.min(rect.width, rect.height) * .09));
+      state.scale = Math.max(.38, Math.min(1, (rect.width - padding * 2) / naturalW, (rect.height - padding * 2) / naturalH));
       els.zoomBadge.textContent = Math.round(state.scale * 100) + "%";
       centerMap();
     }
@@ -2130,8 +2216,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const chosen = els.styleOptions.querySelector("[data-style].active");
       state.mapStyle = chosen ? chosen.dataset.style : "modern";
       state.snapToEdges = false;
+      state.snapToCenters = true;
       state.roadSnapToEdges = false;
       state.riverSnapToEdges = false;
+      state.roadSnapToCenters = true;
+      state.riverSnapToCenters = true;
+      state.drawPathByClicks = false;
+      state.islandClusterCount = 1;
       state.roadSelectExisting = false;
       state.riverSelectExisting = false;
       state.selectExistingPaths = false;
@@ -2160,6 +2251,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.mapTitle.textContent = state.mapName;
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.snapPathToCenters.checked = true;
+      els.drawPathByClicks.checked = false;
+      els.islandClusterCount.value = "1";
       els.roadSelectExisting.checked = false;
       els.riverSelectExisting.checked = false;
       els.roadStyle.value = state.roadStyle;
@@ -2202,6 +2296,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         roadWidth: state.roadWidth,
         roadSnapToEdges: state.roadSnapToEdges,
         riverSnapToEdges: state.riverSnapToEdges,
+        roadSnapToCenters: state.roadSnapToCenters,
+        riverSnapToCenters: state.riverSnapToCenters,
+        drawPathByClicks: state.drawPathByClicks,
         reliefLevel: state.reliefLevel
       };
     }
@@ -2218,8 +2315,10 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.roadWidth = Math.max(.5, Math.min(2.2, Number(settings.roadWidth) || 1));
       state.roadSnapToEdges = Boolean(settings.roadSnapToEdges);
       state.riverSnapToEdges = Boolean(settings.riverSnapToEdges);
-      if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
-      if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
+      state.roadSnapToCenters = !state.roadSnapToEdges && settings.roadSnapToCenters !== false;
+      state.riverSnapToCenters = !state.riverSnapToEdges && settings.riverSnapToCenters !== false;
+      state.drawPathByClicks = Boolean(settings.drawPathByClicks);
+      syncActivePathSnapMode();
       state.reliefLevel = Math.max(0, Math.min(3, Number(settings.reliefLevel ?? 1)));
       els.roadStyle.value = state.roadStyle;
       els.roadColor.value = state.roadColor;
@@ -2228,6 +2327,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.roadWidthValue.textContent = Math.round(state.roadWidth * 100) + "%";
       els.roadSnapToEdges.checked = state.roadSnapToEdges;
       els.riverSnapToEdges.checked = state.riverSnapToEdges;
+      els.snapPathToCenters.checked = state.tool === "river" ? state.riverSnapToCenters : state.roadSnapToCenters;
+      els.drawPathByClicks.checked = state.drawPathByClicks;
       els.reliefLevel.value = state.reliefLevel;
       els.reliefLevelValue.textContent = state.reliefLevel + (state.reliefLevel === 1 ? " nível" : " níveis");
       updateTerrainScaleControl();
@@ -2452,6 +2553,10 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       updatePathSelectionUi();
       syncRoadAppearanceControls();
       els.paintShowIcon.addEventListener("change", () => { state.paintShowIcon = els.paintShowIcon.checked; });
+      els.islandClusterCount.addEventListener("change", () => {
+        state.islandClusterCount = Number(els.islandClusterCount.value);
+        scheduleSave();
+      });
       els.reliefLevel.addEventListener("input", () => {
         state.reliefLevel = Number(els.reliefLevel.value);
         els.reliefLevelValue.textContent = state.reliefLevel + (state.reliefLevel === 1 ? " nível" : " níveis");
@@ -2486,12 +2591,32 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       });
       els.roadSnapToEdges.addEventListener("change", () => {
         state.roadSnapToEdges = els.roadSnapToEdges.checked;
-        if (state.tool === "road") state.snapToEdges = state.roadSnapToEdges;
+        if (state.roadSnapToEdges) state.roadSnapToCenters = false;
+        syncActivePathSnapMode();
+        els.snapPathToCenters.checked = state.tool === "river" ? state.riverSnapToCenters : state.roadSnapToCenters;
+        scheduleSave();
+      });
+      els.snapPathToCenters.addEventListener("change", () => {
+        const prefix = state.tool === "river" ? "river" : "road";
+        state[prefix + "SnapToCenters"] = els.snapPathToCenters.checked;
+        if (state[prefix + "SnapToCenters"]) {
+          state[prefix + "SnapToEdges"] = false;
+          (prefix === "river" ? els.riverSnapToEdges : els.roadSnapToEdges).checked = false;
+        }
+        syncActivePathSnapMode();
+        scheduleSave();
+      });
+      els.drawPathByClicks.addEventListener("change", () => {
+        state.drawPathByClicks = els.drawPathByClicks.checked;
+        if (state.currentPath) finishFreePath();
+        setTool(state.tool);
         scheduleSave();
       });
       els.riverSnapToEdges.addEventListener("change", () => {
         state.riverSnapToEdges = els.riverSnapToEdges.checked;
-        if (state.tool === "river") state.snapToEdges = state.riverSnapToEdges;
+        if (state.riverSnapToEdges) state.riverSnapToCenters = false;
+        syncActivePathSnapMode();
+        els.snapPathToCenters.checked = state.tool === "river" ? state.riverSnapToCenters : state.roadSnapToCenters;
         scheduleSave();
       });
       els.roadSelectExisting.addEventListener("change", () => {
