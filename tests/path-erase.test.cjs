@@ -1,0 +1,26 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+
+test("eraser respects separate road and river filters", () => {
+  const context = {
+    window: {},
+    MapPathGeometry: {
+      findPathAt: (paths, pos, type) => paths.findIndex(path => path.type === type),
+      findPathEndpointAt: () => null
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(require.resolve("../assets/js/components/path-tool-controller.js"), "utf8"), context);
+  const state = {
+    paths: [{ type: "road", points: [[0, 0], [1, 1]] }, { type: "river", points: [[0, 0], [1, 1]] }],
+    selectedPathIndex: null, hexSize: 30, scale: 1
+  };
+  const els = { deleteSelectedPathBtn: {}, pathSelectionHint: {} };
+  let saves = 0;
+  const controller = context.window.PathToolController.create({ state, els, pixelToWorld: () => [0, 0], snapPathPoint: () => ({ x: 0, y: 0 }), worldToPixel: () => ({ x: 0, y: 0 }), recordHistory: () => {}, scheduleSave: () => saves++, draw: () => {} });
+  assert.equal(controller.eraseNear({}, { roads: false, rivers: true }), true);
+  assert.deepEqual(Array.from(state.paths, path => path.type), ["road"]);
+  assert.equal(controller.eraseNear({}, { roads: false, rivers: true }), false);
+  assert.equal(saves, 1);
+});

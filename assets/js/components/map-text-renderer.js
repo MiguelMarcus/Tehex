@@ -56,16 +56,22 @@
     ctx.drawImage(tint(mask, item.color || "#287a45"), x, y);
   }
 
+  function getBounds(item, state, worldToPixel) {
+    const point = worldToPixel(item.point);
+    const size = Math.max(6, Math.min(56, Number(item.size) || 26)) * state.scale;
+    const { mask, textWidth, textHeight } = maskFor(item.text || "", item, size);
+    const padding = (Number(item.outline) || 0) + (Number(item.glow) || 0) * .5;
+    const width = textWidth + size * 1.05 + padding * 2;
+    const height = textHeight + padding * 2;
+    const left = item.align === "left" ? point.x : item.align === "right" ? point.x - width : point.x - width / 2;
+    const spriteX = item.align === "left" ? point.x : item.align === "right" ? point.x - mask.width : point.x - mask.width / 2;
+    return { point, size, mask, width, height, left, spriteX, spriteY: point.y - mask.height / 2 };
+  }
+
   function draw(ctx, { state, worldToPixel }) {
     (state.texts || []).forEach((item, index) => {
       if (!item.text || !Array.isArray(item.point)) return;
-      const point = worldToPixel(item.point), size = Math.max(6, Math.min(56, Number(item.size) || 26)) * state.scale;
-      const { mask, textWidth, textHeight } = maskFor(item.text, item, size);
-      const padding = (Number(item.outline) || 0) + (Number(item.glow) || 0) * .5;
-      const width = textWidth + size * 1.05 + padding * 2, height = textHeight + padding * 2;
-      const left = item.align === "left" ? point.x : item.align === "right" ? point.x - width : point.x - width / 2;
-      const spriteX = item.align === "left" ? point.x : item.align === "right" ? point.x - mask.width : point.x - mask.width / 2;
-      const spriteY = point.y - mask.height / 2;
+      const { point, size, mask, width, height, left, spriteX, spriteY } = getBounds(item, state, worldToPixel);
       ctx.save();
       if (item.background !== false) {
         ctx.fillStyle = item.backgroundColor || "#fff4d6"; ctx.strokeStyle = item.borderColor || "#6f572f"; ctx.lineWidth = Math.max(1, state.scale);
@@ -86,5 +92,5 @@
     });
   }
 
-  window.MapTextRenderer = Object.freeze({ draw });
+  window.MapTextRenderer = Object.freeze({ draw, getBounds });
 })();

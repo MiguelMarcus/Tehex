@@ -17,6 +17,12 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     reliefSection.hidden = true;
     reliefSection.innerHTML = '<h2>Relevo</h2><label class="range-row" for="reliefLevel">Altura: <span id="reliefLevelValue">1 nível</span><input id="reliefLevel" type="range" min="0" max="3" step="1" value="1"></label><p class="hint">Clique ou arraste pelos hexes desejados. Use 0 para remover o relevo.</p>';
     document.getElementById("terrainSection").after(reliefSection);
+    const eraseSection = document.createElement("section");
+    eraseSection.id = "eraseSection";
+    eraseSection.className = "section context-section";
+    eraseSection.hidden = true;
+    eraseSection.innerHTML = '<h2>Apagar somente</h2><div class="erase-targets"><label><input type="checkbox" data-erase="terrain" checked> Terreno</label><label><input type="checkbox" data-erase="relief" checked> Relevo</label><label><input type="checkbox" data-erase="places" checked> Lugares e notas</label><label><input type="checkbox" data-erase="roads" checked> Ruas</label><label><input type="checkbox" data-erase="rivers" checked> Rios</label><label><input type="checkbox" data-erase="texts" checked> Textos avulsos</label></div><p class="hint">Marque apenas o que deseja remover. Arraste para apagar vários hexes.</p>';
+    reliefSection.after(eraseSection);
     const roadStyleRow = document.createElement("div");
     roadStyleRow.className = "form-row";
     roadStyleRow.innerHTML = '<label for="roadStyle">Estilo</label><select id="roadStyle"><option value="trail">Trilha</option><option value="simple" selected>Estrada simples</option><option value="main">Estrada principal</option></select>';
@@ -34,6 +40,12 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     textStyleOptions.className = "feature-form-grid";
     textStyleOptions.innerHTML = '<div class="form-row"><label for="mapTextPreset">Preset</label><select id="mapTextPreset"><option value="region">Região</option><option value="city">Cidade</option><option value="subtle">Discreto</option></select></div><div class="form-row"><label for="mapTextBackgroundColor">Fundo</label><input id="mapTextBackgroundColor" type="color" value="#fff4d6"></div><div class="form-row"><label for="mapTextBorderColor">Borda</label><input id="mapTextBorderColor" type="color" value="#6f572f"></div><div class="form-row"><label for="mapTextFont">Fonte</label><select id="mapTextFont"><option value="Georgia, serif">Georgia</option><option value="Palatino Linotype, Palatino, serif">Palatino</option><option value="Times New Roman, serif">Times New Roman</option></select></div><label class="range-row" for="mapTextOutline">Contorno: <span id="mapTextOutlineValue">0 px</span><input id="mapTextOutline" type="range" min="0" max="8" value="0"></label><div class="form-row"><label for="mapTextOutlineColor">Cor do contorno</label><input id="mapTextOutlineColor" type="color" value="#fff9f0"></div><label class="range-row" for="mapTextGlow">Brilho: <span id="mapTextGlowValue">0 px</span><input id="mapTextGlow" type="range" min="0" max="16" value="0"></label><div class="form-row"><label for="mapTextGlowColor">Cor do brilho</label><input id="mapTextGlowColor" type="color" value="#ffffff"></div><div class="form-row"><label for="mapTextAlign">Alinhamento</label><select id="mapTextAlign"><option value="left">Esquerda</option><option value="center" selected>Centro</option><option value="right">Direita</option></select></div><label class="range-row" for="mapTextCurvature">Curvatura: <span id="mapTextCurvatureValue">0</span><input id="mapTextCurvature" type="range" min="-40" max="40" value="0"></label><label class="range-row" for="mapTextLetterSpacing">Espaçamento: <span id="mapTextLetterSpacingValue">0 px</span><input id="mapTextLetterSpacing" type="range" min="-4" max="16" value="0"></label><div class="toggle-row"><input id="mapTextSharp" type="checkbox"><label for="mapTextSharp">Nitidez de fonte</label></div><button id="deleteSelectedTextBtn" type="button" disabled>Excluir texto selecionado</button>';
     document.getElementById("textSection").querySelector(".hint").before(textStyleOptions);
+    const duplicateTextBtn = document.createElement("button");
+    duplicateTextBtn.id = "duplicateTextBtn";
+    duplicateTextBtn.type = "button";
+    duplicateTextBtn.textContent = "Duplicar texto selecionado";
+    duplicateTextBtn.disabled = true;
+    document.getElementById("deleteSelectedTextBtn").before(duplicateTextBtn);
     document.getElementById("mapTextShape").appendChild(new Option("Placa retangular", "rectangle"));
     document.getElementById("mapTextSharp").closest(".toggle-row").remove();
     const exportPlaceCategories = document.createElement("div");
@@ -77,6 +89,26 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         button.innerHTML = `<i class="bi bi-${iconsByTool[button.dataset.tool]}" aria-hidden="true"></i><span>${label}</span>`;
         button.title += ` (${shortcutsByTool[button.dataset.tool]})`;
       });
+      const toolGroups = [
+        ["Navegação", ["navigate", "select"]],
+        ["Criar", ["paint", "relief", "place", "text"]],
+        ["Traçados", ["road", "river"]],
+        ["Correção", ["erase"]]
+      ];
+      const grid = document.getElementById("toolGrid");
+      toolGroups.forEach(([label, tools]) => {
+        const group = document.createElement("div");
+        group.className = "tool-group";
+        const heading = document.createElement("div");
+        heading.className = "tool-group-title";
+        heading.textContent = label;
+        group.appendChild(heading);
+        const buttons = document.createElement("div");
+        buttons.className = "tool-group-buttons";
+        tools.forEach(tool => buttons.appendChild(grid.querySelector(`[data-tool="${tool}"]`)));
+        group.appendChild(buttons);
+        grid.appendChild(group);
+      });
     }
 
     const headerActions = document.createElement("div");
@@ -92,6 +124,12 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     textScaleRow.htmlFor = "selectedTextScale";
     textScaleRow.innerHTML = 'Tamanho do texto: <span id="selectedTextScaleValue">100%</span><input id="selectedTextScale" type="range" min="25" max="300" value="100">';
     document.getElementById("selectedName").closest(".form-row").after(textScaleRow);
+    const duplicatePlaceBtn = document.createElement("button");
+    duplicatePlaceBtn.id = "duplicatePlaceBtn";
+    duplicatePlaceBtn.type = "button";
+    duplicatePlaceBtn.textContent = "Duplicar local no hex vizinho";
+    duplicatePlaceBtn.disabled = true;
+    document.getElementById("applyDetailsBtn").after(duplicatePlaceBtn);
     document.getElementById("mapTextSize").min = "6";
 
     function addPercentInput(rangeId) {
@@ -172,6 +210,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       toolHint: document.getElementById("toolHint"),
       terrainSection: document.getElementById("terrainSection"),
       reliefSection: document.getElementById("reliefSection"),
+      eraseSection: document.getElementById("eraseSection"),
       reliefLevel: document.getElementById("reliefLevel"),
       reliefLevelValue: document.getElementById("reliefLevelValue"),
       placeSection: document.getElementById("placeSection"),
@@ -199,6 +238,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       mapTextLetterSpacingValue: document.getElementById("mapTextLetterSpacingValue"),
       mapTextSharp: document.getElementById("mapTextSharp"),
       deleteSelectedTextBtn: document.getElementById("deleteSelectedTextBtn"),
+      duplicateTextBtn,
+      duplicatePlaceBtn,
       pathAssistSection: document.getElementById("pathAssistSection"),
       roadOptionsSection: document.getElementById("roadOptionsSection"),
       riverOptionsSection: document.getElementById("riverOptionsSection"),
@@ -377,14 +418,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       if (!listB.includes(k1)) listB.push(k1);
     }
 
-    function removeCellConnections(q, r) {
+    function removeCellConnections(q, r, targets = { roads: true, rivers: true }) {
       const target = key(q, r);
       Object.entries(state.cells).forEach(([k, cell]) => {
-        cell.roads = (cell.roads || []).filter(x => x !== target);
-        cell.rivers = (cell.rivers || []).filter(x => x !== target);
+        if (targets.roads) cell.roads = (cell.roads || []).filter(x => x !== target);
+        if (targets.rivers) cell.rivers = (cell.rivers || []).filter(x => x !== target);
         if (k === target) {
-          cell.roads = [];
-          cell.rivers = [];
+          if (targets.roads) cell.roads = [];
+          if (targets.rivers) cell.rivers = [];
         }
       });
     }
@@ -921,9 +962,11 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         clearPathSelection();
       }
       if (tool !== "paint") state.hoveredBrush = null;
+      canvas.dataset.tool = tool;
       document.querySelectorAll("[data-tool]").forEach(btn => btn.classList.toggle("active", btn.dataset.tool === tool));
       els.terrainSection.hidden = tool !== "paint";
       els.reliefSection.hidden = tool !== "relief";
+      els.eraseSection.hidden = tool !== "erase";
       els.placeSection.hidden = tool !== "place";
       els.textSection.hidden = tool !== "text";
       els.pathAssistSection.hidden = tool !== "road" && tool !== "river";
@@ -941,7 +984,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           : tool === "select"
             ? "Clique para editar ou arraste um local. Ctrl/Cmd+C copia; selecione um hex vazio e use Ctrl/Cmd+V."
             : tool === "text"
-              ? "Escreva um título e clique no mapa para criar um texto. Ctrl/Cmd+C copia; Ctrl/Cmd+V duplica."
+              ? "Clique para criar ou arraste para mover. Duplo clique edita no mapa; Ctrl/Cmd+V duplica."
+            : tool === "erase"
+              ? "Marque os tipos abaixo e clique ou arraste no mapa para apagar somente eles."
             : "Arraste para pintar. Em rua ou rio, arraste livremente para desenhar curvas.";
       updatePathSelectionUi();
       if (tool === "select") renderSelectedLabelEditor();
@@ -1118,13 +1163,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           cellAt(brushQ, brushR).elevation = state.reliefLevel;
         });
       } else if (state.tool === "erase") {
+        const targets = state.eraseTargets;
         cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
           const cell = cellAt(brushQ, brushR);
-          cell.place = null;
-          cell.notes = "";
-          cell.terrain = "grass";
-          cell.elevation = 0;
-          removeCellConnections(brushQ, brushR);
+          if (targets.places) { cell.place = null; cell.notes = ""; }
+          if (targets.terrain) { cell.terrain = "grass"; cell.showIcon = true; }
+          if (targets.relief) cell.elevation = 0;
+          if (targets.roads || targets.rivers) removeCellConnections(brushQ, brushR, targets);
         });
       }
       syncDetails();
@@ -1146,6 +1191,18 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       scheduleSave();
       draw();
       return true;
+    }
+
+    function duplicateSelectedPlace() {
+      if (!state.selected) return;
+      const source = cellAt(state.selected.q, state.selected.r);
+      if (!source.place) return;
+      const neighbor = neighborEdges(state.selected.q, state.selected.r).find(({ q, r }) => q >= 0 && r >= 0 && q < state.cols && r < state.rows && !state.cells[key(q, r)]?.place);
+      if (!neighbor) { els.toolHint.textContent = "Não há hex vizinho vazio para duplicar este local."; return; }
+      recordHistory();
+      cellAt(neighbor.q, neighbor.r).place = JSON.parse(JSON.stringify(source.place));
+      state.selected = { q: neighbor.q, r: neighbor.r };
+      syncDetails(); updatePlaces(); scheduleSave(); draw();
     }
 
     function cellsInBrush(q, r) {
@@ -1176,12 +1233,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     }
 
     const textTool = MapTextToolController.create({
-      state, els, pixelToWorld, worldToPixel, recordHistory, scheduleSave, draw
+      state, els, canvas, pixelToWorld, worldToPixel, recordHistory, scheduleSave, draw
     });
     const {
       applyPreset: applyMapTextPreset,
       beginInteraction: beginMapTextInteraction,
       deleteSelected: deleteSelectedMapText,
+      editAt: editMapTextAt,
       eraseNear: eraseMapTextNear,
       move: moveMapText,
       syncControls: syncTextControls,
@@ -1200,6 +1258,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     function syncDetails() {
       if (!state.selected) {
+        els.duplicatePlaceBtn.disabled = true;
         els.selectedCoord.value = "-";
         els.selectedName.value = "";
         els.selectedTextScale.value = 100;
@@ -1212,6 +1271,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       }
       const { q, r } = state.selected;
       const cell = cellAt(q, r);
+      els.duplicatePlaceBtn.disabled = !cell.place || !neighborEdges(q, r).some(({ q: nq, r: nr }) => nq >= 0 && nr >= 0 && nq < state.cols && nr < state.rows && !state.cells[key(nq, nr)]?.place);
       els.selectedCoord.value = q + ", " + r;
       els.selectedName.value = cell.place ? cell.place.name : "";
       const textScale = cell.place ? Math.round((Number(cell.place.textScale) || 1) * 100) : 100;
@@ -1324,14 +1384,11 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const context = canvas.getContext("2d");
       const cols = Math.max(1, Number(project?.cols) || 1);
       const rows = Math.max(1, Number(project?.rows) || 1);
-      const hexWidth = Math.min(18, (width - 12) / (cols + .5));
-      const hexHeight = hexWidth * 1.15;
-      const horizontal = hexWidth;
-      const vertical = hexHeight * .86;
-      const mapWidth = horizontal * (cols + .5);
-      const mapHeight = vertical * (rows - 1) + hexHeight;
-      const offsetX = (width - mapWidth) / 2 + hexWidth / 2;
-      const offsetY = (height - mapHeight) / 2 + hexHeight / 2;
+      const radius = Math.min(12, (width - 12) / (1.5 * (cols - 1) + 2), (height - 12) / (Math.sqrt(3) * (rows + .5)));
+      const mapWidth = radius * (1.5 * (cols - 1) + 2);
+      const mapHeight = radius * Math.sqrt(3) * (rows + .5);
+      const offsetX = (width - mapWidth) / 2 + radius;
+      const offsetY = (height - mapHeight) / 2 + radius * Math.sqrt(3) / 2;
       const terrainColors = Object.fromEntries(terrains.map(item => [item.id, item.color]));
       const cells = project?.cells || {};
 
@@ -1343,13 +1400,12 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       context.lineWidth = .7;
       for (let row = 0; row < rows; row++) {
         for (let column = 0; column < cols; column++) {
-          const centerX = offsetX + column * horizontal + (row % 2 ? horizontal / 2 : 0);
-          const centerY = offsetY + row * vertical;
+          const centerX = offsetX + column * radius * 1.5;
+          const centerY = offsetY + radius * Math.sqrt(3) * (row + .5 * (column & 1));
           const cell = cells[column + ":" + row] || cells[column + "," + row] || {};
-          const radius = hexWidth * .58;
           context.beginPath();
           for (let point = 0; point < 6; point++) {
-            const angle = Math.PI / 3 * point + Math.PI / 6;
+            const angle = Math.PI / 3 * point;
             const x = centerX + radius * Math.cos(angle);
             const y = centerY + radius * Math.sin(angle);
             if (point === 0) context.moveTo(x, y); else context.lineTo(x, y);
@@ -1361,7 +1417,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           if (cell.place) {
             context.fillStyle = "#f7e6ae";
             context.beginPath();
-            context.arc(centerX, centerY, Math.max(1.8, hexWidth * .16), 0, Math.PI * 2);
+            context.arc(centerX, centerY, Math.max(1.8, radius * .3), 0, Math.PI * 2);
             context.fill();
             context.strokeStyle = "#51371d";
             context.stroke();
@@ -1478,8 +1534,12 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.cols += isColumn ? delta : 0;
       state.rows += !isColumn ? delta : 0;
       state.cells = nextCells;
-      state.paths = state.paths.map(path => ({ ...path, points: path.points.map(([q, r]) => [q + shiftQ, r + shiftR]) }));
-      state.texts = (state.texts || []).map(item => ({ ...item, point: [item.point[0] + shiftQ, item.point[1] + shiftR] }));
+      const shiftPoint = ([q, r]) => {
+        const column = Math.round(q);
+        return [q + shiftQ, r + shiftR + .5 * (((column + shiftQ) & 1) - (column & 1))];
+      };
+      state.paths = state.paths.map(path => ({ ...path, points: path.points.map(shiftPoint) }));
+      state.texts = (state.texts || []).map(item => ({ ...item, point: shiftPoint(item.point) }));
       if (state.selected) {
         const selected = { q: state.selected.q + shiftQ, r: state.selected.r + shiftR };
         state.selected = selected.q >= 0 && selected.r >= 0 && selected.q < state.cols && selected.r < state.rows ? selected : null;
@@ -1493,6 +1553,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     function exportState() {
       return {
+        geometryVersion: 2,
         mapId: state.mapId,
         mapName: state.mapName,
         mapStyle: state.mapStyle,
@@ -1603,8 +1664,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.cols = cols;
       state.rows = rows;
       state.cells = data.cells || {};
-      state.paths = paths;
-      state.texts = Array.isArray(data.texts) ? data.texts : [];
+      const legacyGeometry = Number(data.geometryVersion) < 2;
+      state.paths = legacyGeometry
+        ? paths.map(path => ({ ...path, points: path.points.map(MapGeometry.migratePointFromPointyGrid) }))
+        : paths;
+      state.texts = Array.isArray(data.texts)
+        ? data.texts.map(item => legacyGeometry ? { ...item, point: MapGeometry.migratePointFromPointyGrid(item.point) } : item)
+        : [];
       els.mapSizeLabel.textContent = state.cols + " x " + state.rows;
       state.selectedTextIndex = null;
       state.placeDraft = null;
@@ -1693,7 +1759,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       });
       state.paths = (data.paths || []).filter(path => path.points && path.points.length > 1).map(path => ({
         type: path.type === "water" ? "river" : "road",
-        points: path.points.map(point => [Number(point.x) - Number(point.y) / 2, Number(point.y)])
+        points: path.points.map(point => MapGeometry.migratePointFromPointyGrid([Number(point.x) - Number(point.y) / 2, Number(point.y)]))
       }));
       state.texts = [];
       state.selectedTextIndex = null;
@@ -1881,16 +1947,16 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       };
       const requestedScale = Number(options.resolution) || 2.25;
       const maxExportSide = 6144;
-      const maxScaleByWidth = maxExportSide / (state.hexSize * (Math.sqrt(3) * state.cols + 1.8));
-      const maxScaleByHeight = maxExportSide / (state.hexSize * (1.5 * (state.rows - 1) + 3.8));
+      const maxScaleByWidth = maxExportSide / (state.hexSize * (1.5 * (state.cols - 1) + 3.8));
+      const maxScaleByHeight = maxExportSide / (state.hexSize * (Math.sqrt(3) * (state.rows + .5) + 1.8));
       const exportScale = Math.min(requestedScale, maxScaleByWidth, maxScaleByHeight);
       const size = state.hexSize * exportScale;
       const margin = Math.round(size * .9);
       const titleHeight = options.title ? 82 : 0;
       const groups = options.legend ? legendGroups(options) : [];
       const legendHeight = groups.length ? getLegendHeight(groups, exportScale) : 0;
-      const width = Math.ceil(size * Math.sqrt(3) * state.cols + margin * 2);
-      const mapHeight = Math.ceil(titleHeight + size * 1.5 * (state.rows - 1) + size * 2 + margin * 2);
+      const width = Math.ceil(size * (1.5 * (state.cols - 1) + 2) + margin * 2);
+      const mapHeight = Math.ceil(titleHeight + size * Math.sqrt(3) * (state.rows + .5) + margin * 2);
       const height = Math.ceil(mapHeight + legendHeight);
       try {
         exportProgress.show();
@@ -1918,8 +1984,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           width,
           height,
           renderTile: (tileX, tileY) => {
-            state.offsetX = margin + size * Math.sqrt(3) / 2 - tileX;
-            state.offsetY = titleHeight + margin + size - tileY;
+            state.offsetX = margin + size - tileX;
+            state.offsetY = titleHeight + margin + size * Math.sqrt(3) / 2 - tileY;
             renderNow();
           },
           onProgress: (completed, total) => {
@@ -1971,17 +2037,17 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     function centerMap() {
       const rect = canvas.getBoundingClientRect();
-      const mapW = state.hexSize * Math.sqrt(3) * (state.cols + .5) * state.scale;
-      const mapH = state.hexSize * 1.5 * (state.rows - 1) * state.scale + state.hexSize * 2 * state.scale;
+      const mapW = state.hexSize * (1.5 * (state.cols - 1) + 2) * state.scale;
+      const mapH = state.hexSize * Math.sqrt(3) * (state.rows + .5) * state.scale;
       state.offsetX = Math.max(28, (rect.width - mapW) / 2 + state.hexSize * state.scale);
-      state.offsetY = Math.max(28, (rect.height - mapH) / 2 + state.hexSize * state.scale);
+      state.offsetY = Math.max(28, (rect.height - mapH) / 2 + state.hexSize * Math.sqrt(3) * state.scale / 2);
       draw();
     }
 
     function fitMap() {
       const rect = canvas.getBoundingClientRect();
-      const naturalW = state.hexSize * Math.sqrt(3) * (state.cols + .5);
-      const naturalH = state.hexSize * 1.5 * (state.rows - 1) + state.hexSize * 2;
+      const naturalW = state.hexSize * (1.5 * (state.cols - 1) + 2);
+      const naturalH = state.hexSize * Math.sqrt(3) * (state.rows + .5);
       state.scale = Math.max(.38, Math.min(1, (rect.width - 48) / naturalW, (rect.height - 48) / naturalH));
       els.zoomBadge.textContent = Math.round(state.scale * 100) + "%";
       centerMap();
@@ -2281,14 +2347,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       if (command !== "v" || !state.clipboard) return;
       if (state.clipboard.type === "text" && state.tool === "text") {
         event.preventDefault();
-        recordHistory();
-        const value = JSON.parse(JSON.stringify(state.clipboard.value));
-        value.point = [value.point[0] + .55, value.point[1] + .55];
-        state.texts.push(value);
-        state.selectedTextIndex = state.texts.length - 1;
-        syncTextControls();
-        scheduleSave();
-        draw();
+        const copy = duplicateMapText(state.clipboard.value);
+        if (copy) state.clipboard.value = JSON.parse(JSON.stringify(copy));
       } else if (state.clipboard.type === "place" && state.tool === "select" && state.selected) {
         const cell = cellAt(state.selected.q, state.selected.r);
         if (cell.place) return;
@@ -2300,6 +2360,18 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         scheduleSave();
         draw();
       }
+    }
+
+    function duplicateMapText(source = state.texts[state.selectedTextIndex]) {
+      if (!source) return;
+      recordHistory();
+      const value = JSON.parse(JSON.stringify(source));
+      const offset = 32 / (state.hexSize * state.scale);
+      value.point = [value.point[0] + offset / 1.5, value.point[1] + offset / Math.sqrt(3)];
+      state.texts.push(value);
+      state.selectedTextIndex = state.texts.length - 1;
+      syncTextControls(); scheduleSave(); draw();
+      return value;
     }
 
     function initControls() {
@@ -2421,6 +2493,9 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       });
       els.mapTextPreset.addEventListener("change", () => applyMapTextPreset(els.mapTextPreset.value));
       els.deleteSelectedTextBtn.addEventListener("click", deleteSelectedMapText);
+      els.duplicateTextBtn.addEventListener("click", () => duplicateMapText());
+      els.duplicatePlaceBtn.addEventListener("click", duplicateSelectedPlace);
+      els.eraseSection.querySelectorAll("[data-erase]").forEach(input => input.addEventListener("change", () => { state.eraseTargets[input.dataset.erase] = input.checked; }));
       els.deleteSelectedPathBtn.addEventListener("click", deleteSelectedPath);
       els.undoBtn.addEventListener("click", undo);
       els.redoBtn.addEventListener("click", redo);
@@ -2561,7 +2636,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     MapCanvasController.bind({
       canvas, state, key, pixelToHex, pixelToWorld, worldToPixel,
-      findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, moveMapText, eraseMapTextNear,
+      findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, editMapTextAt, moveMapText, eraseMapTextNear,
       recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection,
       setTool, syncDetails, setZoom, focusSelectedName: () => els.selectedName.focus(), resizeCanvas
     });

@@ -1,10 +1,22 @@
 (function () {
   "use strict";
 
-  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, moveMapText, eraseMapTextNear, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
+  function bind({ canvas, state, key, pixelToHex, pixelToWorld, findPathAt, findPathEndpointAt, startFreePath, startPathFromEndpoint, addFreePathPoint, finishFreePath, beginMapTextInteraction, editMapTextAt, moveMapText, eraseMapTextNear, recordHistory, scheduleSave, draw, handleCell, movePlace, eraseFreePathsNear, selectPath, clearPathSelection, setTool, syncDetails, setZoom, focusSelectedName, resizeCanvas }) {
     function pointerPos(event) {
       const rect = canvas.getBoundingClientRect();
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    }
+
+    function eraseAt(pos, cell) {
+      const targets = state.eraseTargets;
+      if (targets.texts && eraseMapTextNear(pos)) { state.activePathKey = cell && key(cell.q, cell.r); return; }
+      if ((targets.roads || targets.rivers) && eraseFreePathsNear(pos, targets)) { state.activePathKey = cell && key(cell.q, cell.r); return; }
+      if (!cell || !["terrain", "relief", "places", "roads", "rivers"].some(type => targets[type])) return;
+      const cellKey = key(cell.q, cell.r);
+      if (cellKey === state.activePathKey) return;
+      state.activePathKey = cellKey;
+      recordHistory();
+      handleCell(cell);
     }
 
     canvas.addEventListener("pointerdown", event => {
@@ -56,24 +68,14 @@
       } else {
         const cell = pixelToHex(pos.x, pos.y);
         if (state.tool === "paint" || state.tool === "relief") state.hoveredBrush = cell;
-        if (cell) state.activePathKey = key(cell.q, cell.r);
+        if (cell && state.tool !== "erase") state.activePathKey = key(cell.q, cell.r);
         if (state.tool === "select" && cell && state.cells[key(cell.q, cell.r)]?.place) {
           state.placeDrag = { source: { q: cell.q, r: cell.r }, start: pos, historyRecorded: false };
         }
-        if (cell && (state.tool === "paint" || state.tool === "place" || state.tool === "relief" || state.tool === "erase")) recordHistory();
+        if (cell && (state.tool === "paint" || state.tool === "place" || state.tool === "relief")) recordHistory();
         if (state.tool === "erase") {
-          if (eraseMapTextNear(pos)) {
-            state.isPainting = false;
-            return;
-          }
-          const existing = findPathAt(pos, "road");
-          const river = existing === -1 ? findPathAt(pos, "river") : -1;
-          if (existing !== -1 || river !== -1) {
-            state.isPainting = false;
-            eraseFreePathsNear(pos);
-            return;
-          }
-          eraseFreePathsNear(pos);
+          eraseAt(pos, cell);
+          return;
         }
         handleCell(cell);
       }
@@ -134,15 +136,15 @@
         if (changed) draw();
       }
       if (!state.isPainting) return;
+      if (state.tool === "erase") { eraseAt(pos, cell); return; }
       if (state.tool === "road" || state.tool === "river") {
         addFreePathPoint(pos);
         return;
       }
       if (!cell) return;
       const hoveredKey = key(cell.q, cell.r);
-      if ((state.tool === "paint" || state.tool === "relief" || state.tool === "erase") && hoveredKey !== state.activePathKey) {
+      if ((state.tool === "paint" || state.tool === "relief") && hoveredKey !== state.activePathKey) {
         state.activePathKey = hoveredKey;
-        if (state.tool === "erase") eraseFreePathsNear(pos);
         handleCell(cell);
       }
     });
@@ -178,6 +180,7 @@
     canvas.addEventListener("dblclick", event => {
       if (state.tool === "navigate") return;
       const pos = pointerPos(event);
+      if (state.tool === "text") { editMapTextAt(pos); return; }
       const cell = pixelToHex(pos.x, pos.y);
       if (cell) {
         state.selected = cell;

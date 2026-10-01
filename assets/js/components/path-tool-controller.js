@@ -135,16 +135,17 @@
       draw();
     }
 
-    function eraseNear(pos) {
-      const threshold = Math.max(10, state.hexSize * state.scale * .34);
-      const roadIndex = findPathAt(pos, "road");
-      const riverIndex = roadIndex === -1 ? findPathAt(pos, "river") : -1;
+    function eraseNear(pos, allowed = { roads: true, rivers: true }) {
+      const roadIndex = allowed.roads ? findPathAt(pos, "road") : -1;
+      const riverIndex = roadIndex === -1 && allowed.rivers ? findPathAt(pos, "river") : -1;
       const eraseIndex = roadIndex !== -1 ? roadIndex : riverIndex;
       const before = (state.paths || []).length;
-      if (eraseIndex === -1) return;
+      if (eraseIndex === -1) return false;
       recordHistory();
       state.paths = (state.paths || []).filter((path, index) => index !== eraseIndex);
       if (state.paths.length !== before) scheduleSave();
+      draw();
+      return true;
     }
 
     return Object.freeze({ addFreePathPoint, clearSelection, deleteSelectedPath, eraseNear, findPathAt, findPathEndpointAt, finishFreePath, selectPath, startFreePath, startPathFromEndpoint, updateSelectionUi });
