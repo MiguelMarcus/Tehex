@@ -28,6 +28,10 @@
         state.panStart = { x: event.clientX, y: event.clientY, ox: state.offsetX, oy: state.offsetY };
         return;
       }
+      if (event.button === 2 && (state.tool === "road" || state.tool === "river")) {
+        if (state.currentPath && state.currentPath.type === state.tool) finishFreePath();
+        clearPathSelection();
+      }
       if (event.button === 2 || event.shiftKey || event.ctrlKey || event.code === "Space") {
         state.isPanning = true;
         state.panStart = { x: event.clientX, y: event.clientY, ox: state.offsetX, oy: state.offsetY };

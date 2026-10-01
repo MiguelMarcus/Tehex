@@ -20,6 +20,7 @@
       tool: "paint",
       terrain: "grass",
       islandClusterCount: 1,
+      lakeSize: "medium",
       paintShowIcon: true,
       brushSize: 1,
       eraseTargets: { terrain: true, relief: true, places: true, details: true, roads: true, rivers: true, texts: true },

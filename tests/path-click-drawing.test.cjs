@@ -40,3 +40,41 @@ test("click drawing keeps one path open until double-click finishes it", () => {
   assert.deepEqual(actions, [["start", 10, 20], ["point", 30, 40], ["finish"]]);
   assert.equal(state.currentPath, null);
 });
+
+test("right-click finalizes and deselects the active river before panning", () => {
+  const listeners = {};
+  const canvas = {
+    addEventListener: (type, listener) => { listeners[type] = listener; },
+    getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    setPointerCapture: () => {}
+  };
+  const context = { window: { addEventListener: () => {} } };
+  vm.runInNewContext(fs.readFileSync(require.resolve("../assets/js/components/map-canvas-controller.js"), "utf8"), context);
+  const state = { tool: "river", drawPathByClicks: false, paths: [], isPainting: true, currentPath: { type: "river" }, selectedPathIndex: 2 };
+  const actions = [];
+  context.window.MapCanvasController.bind({
+    canvas, state, key: () => "", pixelToHex: () => null, pixelToWorld: () => [0, 0],
+    findPathAt: () => -1, findPathEndpointAt: () => null,
+    startFreePath: () => {}, startPathFromEndpoint: () => {}, addFreePathPoint: () => {},
+    finishFreePath: () => {
+      if (!state.currentPath) return;
+      actions.push("finish");
+      state.currentPath = null;
+    },
+    beginMapTextInteraction: () => {}, editMapTextAt: () => {}, moveMapText: () => {}, eraseMapTextNear: () => false,
+    recordHistory: () => {}, scheduleSave: () => {}, draw: () => {}, handleCell: () => {}, movePlace: () => false,
+    eraseFreePathsNear: () => false, selectPath: () => {}, clearPathSelection: () => {
+      if (state.selectedPathIndex === null) return;
+      actions.push("deselect");
+      state.selectedPathIndex = null;
+    }, setTool: () => {}, syncDetails: () => {}, setZoom: () => {}, focusSelectedName: () => {},
+    showSelectedPanel: () => {}, resizeCanvas: () => {}
+  });
+
+  const rightClick = { type: "pointerdown", pointerId: 1, clientX: 50, clientY: 50, button: 2 };
+  listeners.pointerdown(rightClick);
+  listeners.pointerup({ ...rightClick, type: "pointerup" });
+  assert.deepEqual(actions, ["finish", "deselect"]);
+  assert.equal(state.currentPath, null);
+  assert.equal(state.selectedPathIndex, null);
+});

@@ -1,5 +1,6 @@
 const { borderColors, placeTypes, terrainGroups, terrains } = window.MapCatalog;
 const MapIsland = window.MapIsland;
+const MapLake = window.MapLake;
 const landmarkPlaceTypes = new Set(["temple", "ruins", "mine", "pier", "bridge", "signpost", "galleon", "dolmen", "mayanPyramid", "totem", "axeInStump", "grainBundle", "chest", "campfire", "twoCoins", "horseshoe", "danger", "diabloSkull", "deathSkull", "tombstone", "graveyard"]);
 const settlementPlaceTypes = new Set(["settlement", "medievalVillage", "hut", "house", "camp", "goblinCamp", "church", "windmill"]);
 const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTower", "woodenDoor"]);
@@ -29,6 +30,11 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     islandOptionsRow.className = "form-row";
     islandOptionsRow.innerHTML = '<label for="islandClusterCount">Formação</label><select id="islandClusterCount"><option value="1">Ilha única</option><option value="2">2 ilhotas</option><option value="3">3 ilhotas</option></select>';
     document.getElementById("terrainGrid").after(islandOptionsRow);
+    const lakeSizeRow = document.createElement("div");
+    lakeSizeRow.id = "lakeSizeRow";
+    lakeSizeRow.className = "form-row";
+    lakeSizeRow.innerHTML = '<label for="lakeSize">Tamanho do lago</label><select id="lakeSize"><option value="small">Pequeno</option><option value="medium" selected>Médio</option><option value="large">Grande (70-80% do hex)</option></select>';
+    islandOptionsRow.after(lakeSizeRow);
     const centerSnapRow = document.createElement("div");
     centerSnapRow.className = "toggle-row";
     centerSnapRow.innerHTML = '<input id="snapPathToCenters" type="checkbox" checked><label for="snapPathToCenters">Encaixar no centro dos hexes</label>';
@@ -198,6 +204,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       return Promise.all(iconLoadTasks);
     }
     [...terrains, ...Object.values(placeTypes)].forEach(item => {
+      if (!item.icon) return;
       iconImages[item.icon] = loadCanvasSafeIcon(item.icon);
     });
 
@@ -211,6 +218,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       terrainGrid: document.getElementById("terrainGrid"),
       islandOptionsRow: document.getElementById("islandOptionsRow"),
       islandClusterCount: document.getElementById("islandClusterCount"),
+      lakeSizeRow: document.getElementById("lakeSizeRow"),
+      lakeSize: document.getElementById("lakeSize"),
       paintShowIcon: document.getElementById("paintShowIcon"),
       brushSize: document.getElementById("brushSize"),
       brushSizeValue: document.getElementById("brushSizeValue"),
@@ -464,6 +473,42 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       draw();
     }
 
+    function drawLargeLakeConnections(range) {
+      if (!state.layers.terrain) return;
+      const size = state.hexSize * state.scale;
+      const fillColor = isOldSchool() ? "#858585" : terrainById("lake").color;
+      MapRenderPerformance.forEachCell(range, (q, r) => {
+        const cell = cellAt(q, r);
+        if (typeof cell.lakeSeed !== "number" || cell.lakeSize !== "large") return;
+        const start = hexToPixel(q, r);
+        neighborEdges(q, r).forEach(({ q: neighborQ, r: neighborR, edge }) => {
+          if (neighborQ < 0 || neighborR < 0 || neighborQ >= state.cols || neighborR >= state.rows) return;
+          if (neighborQ < q || (neighborQ === q && neighborR < r)) return;
+          const neighbor = cellAt(neighborQ, neighborR);
+          if (typeof neighbor.lakeSeed !== "number" || neighbor.lakeSize !== "large") return;
+          const end = hexToPixel(neighborQ, neighborR);
+          const corners = hexCorners(start.x, start.y, size);
+          const first = corners[edge];
+          const second = corners[(edge + 1) % 6];
+          const edgeX = (first[0] + second[0]) / 2;
+          const edgeY = (first[1] + second[1]) / 2;
+          const deltaX = end.x - start.x;
+          const deltaY = end.y - start.y;
+          const distance = Math.hypot(deltaX, deltaY) || 1;
+          const halfLength = size * .11;
+          MapLake.drawConnection(
+            ctx,
+            edgeX - deltaX / distance * halfLength,
+            edgeY - deltaY / distance * halfLength,
+            edgeX + deltaX / distance * halfLength,
+            edgeY + deltaY / distance * halfLength,
+            size,
+            fillColor
+          );
+        });
+      });
+    }
+
     function renderNow() {
       const rect = canvas.getBoundingClientRect();
       const range = MapRenderPerformance.visibleRange(rect, state, pixelToWorld);
@@ -474,6 +519,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         ctx.fillRect(0, 0, rect.width, rect.height);
       }
       MapRenderPerformance.forEachCell(range, (q, r) => drawHex(q, r, quality));
+      drawLargeLakeConnections(range);
       if (state.layers.terrain) {
         BiomeBorderRenderer.draw(ctx, {
           state, cellAt, terrainById, neighborEdges, hexToPixel, hexCorners,
@@ -673,10 +719,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         const landColor = isOldSchool() ? oldSchoolTerrainColor(land) : displayColor(land.color);
         MapIsland.draw(ctx, p.x, p.y, size, cell.islandSeed, shade(landColor, variation), isOldSchool() ? "#777777" : land.edge, Math.max(.5, .75 * state.scale), cell.islandCount || 1);
       }
+      if (state.layers.terrain && typeof cell.lakeSeed === "number") {
+        const lake = terrainById("lake");
+        MapLake.draw(ctx, p.x, p.y, size, cell.lakeSeed, isOldSchool() ? "#858585" : lake.color, isOldSchool() ? "#555555" : lake.edge, Math.max(.5, .75 * state.scale), cell.lakeSize || "medium");
+      }
       const isLargeMap = !state.isExporting && state.cols * state.rows > 40 * 40;
       const iconDensity = isLargeMap ? .2 : quality === "standard" ? .5 : 1;
       const previewIcon = quality !== "overview" && hash(q, r, 703) < iconDensity;
-      if (state.layers.terrainIcons && previewIcon && cell.showIcon !== false && cell.islandSeed === undefined && !(isOldSchool() && terrain.id === "grass")) {
+      if (state.layers.terrainIcons && previewIcon && cell.showIcon !== false && cell.islandSeed === undefined && cell.lakeSeed === undefined && !(isOldSchool() && terrain.id === "grass")) {
         const iconQualityScale = isLargeMap ? .72 : quality === "detail" ? 1 : .7;
         const iconOpacity = isLargeMap ? .46 : .78;
         drawSvgIcon(terrain.icon, p.x, p.y, size * .48 * iconQualityScale * (state.terrainIconScales[terrainGroupFor(terrain.id).id] || state.terrainIconScales[terrain.id] || state.terrainIconScale), iconOpacity);
@@ -1093,10 +1143,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const terrain = terrainById(state.terrain);
       const group = terrainGroupFor(terrain.id);
       const isIsland = terrain.id === "island";
+      const isIconlessFeature = isIsland || terrain.id === "lake";
       els.islandOptionsRow.hidden = !isIsland;
       els.islandClusterCount.value = String(state.islandClusterCount);
-      els.terrainIconScale.closest(".range-row").hidden = isIsland;
-      els.paintShowIcon.closest(".toggle-row").hidden = isIsland;
+      els.lakeSizeRow.hidden = terrain.id !== "lake";
+      els.lakeSize.value = state.lakeSize;
+      els.terrainIconScale.closest(".range-row").hidden = isIconlessFeature;
+      els.paintShowIcon.closest(".toggle-row").hidden = isIconlessFeature;
       const value = Math.round((state.terrainIconScales[group.id] || state.terrainIconScales[terrain.id] || state.terrainIconScale) * 100);
       els.terrainIconScaleLabel.textContent = "Tamanho dos icones de " + group.name;
       els.terrainIconScale.value = value;
@@ -1224,9 +1277,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         cellsInBrush(q, r).forEach(({ q: brushQ, r: brushR }) => {
           const cell = cellAt(brushQ, brushR);
           if (state.terrain === "island") {
+            MapLake.clearCell(cell);
             MapIsland.paintCell(cell, Math.floor(Math.random() * 4294967296), state.islandClusterCount);
+          } else if (state.terrain === "lake") {
+            MapIsland.clearCell(cell);
+            MapLake.paintCell(cell, Math.floor(Math.random() * 4294967296), state.lakeSize);
           } else {
             MapIsland.clearCell(cell);
+            MapLake.clearCell(cell);
             cell.terrain = state.terrain;
             cell.showIcon = state.paintShowIcon;
           }
@@ -1244,7 +1302,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           const cell = cellAt(brushQ, brushR);
           if (targets.places) cell.place = null;
           if (targets.details) { cell.title = ""; cell.notes = ""; }
-          if (targets.terrain) { MapIsland.clearCell(cell); cell.terrain = "grass"; cell.showIcon = true; }
+          if (targets.terrain) { MapIsland.clearCell(cell); MapLake.clearCell(cell); cell.terrain = "grass"; cell.showIcon = true; }
           if (targets.relief) cell.elevation = 0;
           if (targets.roads || targets.rivers) removeCellConnections(brushQ, brushR, targets);
         });
@@ -1507,6 +1565,10 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           if (typeof cell.islandSeed === "number" && ["water", "ocean"].includes(cell.terrain)) {
             MapIsland.draw(context, centerX, centerY, radius, cell.islandSeed, terrainColors.grass || "#9cab58", "#81954d", .5, cell.islandCount || 1);
           }
+          if (typeof cell.lakeSeed === "number") {
+            const lake = terrainById("lake");
+            MapLake.draw(context, centerX, centerY, radius, cell.lakeSeed, lake.color, lake.edge, .5, cell.lakeSize || "medium");
+          }
           context.stroke();
           if (cell.place) {
             context.fillStyle = "#f7e6ae";
@@ -1652,6 +1714,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         mapName: state.mapName,
         mapStyle: state.mapStyle,
         islandClusterCount: state.islandClusterCount,
+        lakeSize: state.lakeSize,
         snapToEdges: state.snapToEdges,
         roadSnapToEdges: state.roadSnapToEdges,
         riverSnapToEdges: state.riverSnapToEdges,
@@ -1746,6 +1809,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.riverSnapToCenters = !state.riverSnapToEdges && data.riverSnapToCenters !== false;
       state.drawPathByClicks = Boolean(data.drawPathByClicks);
       state.islandClusterCount = [2, 3].includes(Number(data.islandClusterCount)) ? Number(data.islandClusterCount) : 1;
+      state.lakeSize = ["small", "medium", "large"].includes(data.lakeSize) ? data.lakeSize : "medium";
       state.roadSelectExisting = Boolean(data.roadSelectExisting);
       state.riverSelectExisting = Boolean(data.riverSelectExisting);
       state.roadStyle = ["trail", "simple", "main"].includes(data.roadStyle) ? data.roadStyle : "simple";
@@ -1798,6 +1862,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.snapPathToCenters.checked = state.tool === "river" ? state.riverSnapToCenters : state.roadSnapToCenters;
       els.drawPathByClicks.checked = state.drawPathByClicks;
       els.islandClusterCount.value = String(state.islandClusterCount);
+      els.lakeSize.value = state.lakeSize;
       els.roadSelectExisting.checked = state.roadSelectExisting;
       els.riverSelectExisting.checked = state.riverSelectExisting;
       els.roadStyle.value = state.roadStyle;
@@ -1848,6 +1913,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.riverSnapToCenters = true;
       state.drawPathByClicks = false;
       state.islandClusterCount = 1;
+      state.lakeSize = "medium";
       state.roadSelectExisting = false;
       state.riverSelectExisting = false;
       state.selectExistingPaths = false;
@@ -1895,6 +1961,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.snapPathToCenters.checked = true;
       els.drawPathByClicks.checked = false;
       els.islandClusterCount.value = "1";
+      els.lakeSize.value = "medium";
       els.roadSelectExisting.checked = false;
       els.riverSelectExisting.checked = false;
       els.roadStyle.value = state.roadStyle;
@@ -1955,6 +2022,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       Object.values(state.cells).forEach(cell => {
         if (cell.terrain) usedTerrains.add(cell.terrain);
         if (typeof cell.islandSeed === "number" && ["water", "ocean"].includes(cell.terrain)) usedTerrains.add("island");
+        if (typeof cell.lakeSeed === "number") usedTerrains.add("lake");
         if (cell.place?.type) usedPlaces.add(cell.place.type);
       });
       if (state.layers.terrain) {
@@ -2223,6 +2291,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       state.riverSnapToCenters = true;
       state.drawPathByClicks = false;
       state.islandClusterCount = 1;
+      state.lakeSize = "medium";
       state.roadSelectExisting = false;
       state.riverSelectExisting = false;
       state.selectExistingPaths = false;
@@ -2254,6 +2323,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.snapPathToCenters.checked = true;
       els.drawPathByClicks.checked = false;
       els.islandClusterCount.value = "1";
+      els.lakeSize.value = "medium";
       els.roadSelectExisting.checked = false;
       els.riverSelectExisting.checked = false;
       els.roadStyle.value = state.roadStyle;
@@ -2555,6 +2625,10 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.paintShowIcon.addEventListener("change", () => { state.paintShowIcon = els.paintShowIcon.checked; });
       els.islandClusterCount.addEventListener("change", () => {
         state.islandClusterCount = Number(els.islandClusterCount.value);
+        scheduleSave();
+      });
+      els.lakeSize.addEventListener("change", () => {
+        state.lakeSize = els.lakeSize.value;
         scheduleSave();
       });
       els.reliefLevel.addEventListener("input", () => {

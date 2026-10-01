@@ -15,6 +15,7 @@ const terrains = [
   { id: "mushroom", name: "Cogumelos", color: "#76527d", edge: "#94669c", icon: "assets/hex-icons/catalog/mushroom-gills.svg" },
   { id: "sand", name: "Areia", color: "#c0a565", edge: "#d2bd7d", icon: "assets/hex-icons/catalog/cactus.svg" },
   { id: "snow", name: "Neve", color: "#c5cfca", edge: "#aebbb5", icon: "assets/hex-icons/catalog/snowing.svg" }
+  , { id: "lake", name: "Lago", color: "#376f9e", edge: "#2d5b7b" }
 ];
 
 const placeTypes = {
@@ -44,7 +45,7 @@ Object.assign(placeTypes, {
 });
 
 const terrainGroups = [
-  { id: "lowlands", name: "Planicies", terrains: ["grass", "island", "sand", "snow", "mushroom"] }, { id: "forests", name: "Florestas", terrains: ["forest", "denseForest", "willowForest", "deadForest"] }, { id: "highlands", name: "Altitudes", terrains: ["hills", "mountain", "volcano"] }, { id: "waters", name: "Aguas", terrains: ["water", "ocean", "swamp"] }
+  { id: "lowlands", name: "Planicies", terrains: ["grass", "island", "sand", "snow", "mushroom"] }, { id: "forests", name: "Florestas", terrains: ["forest", "denseForest", "willowForest", "deadForest"] }, { id: "highlands", name: "Altitudes", terrains: ["hills", "mountain", "volcano"] }, { id: "waters", name: "Aguas", terrains: ["water", "ocean", "swamp", "lake"] }
 ];
 
 const borderColors = ["none", "#000000", "#55493b", "#77664b", "#9a7c49", "#2f6f78", "#6d4f69", "#ffffff"];
