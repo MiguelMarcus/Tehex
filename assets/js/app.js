@@ -725,7 +725,10 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     function drawHex(q, r, quality) {
       const cell = cellAt(q, r);
       const p = hexToPixel(q, r);
-      const size = state.hexSize * state.scale - .8;
+      // As celulas adjacentes precisam compartilhar a mesma aresta. Encolher
+      // cada hex deixava uma fresta do fundo entre os preenchimentos e a
+      // borda escolhida nunca parecia ocupar toda a linha.
+      const size = state.hexSize * state.scale;
       const terrain = terrainById(cell.terrain);
       const path = hexPath(p.x, p.y, size);
       const baseColor = isOldSchool() ? oldSchoolTerrainColor(terrain) : displayColor(terrain.color);
