@@ -356,6 +356,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       helpModal: document.getElementById("helpModal"),
       exportOptionsModal: document.getElementById("exportOptionsModal"),
       exportFormat: document.getElementById("exportFormat"),
+      uvttExportHint: document.getElementById("uvttExportHint"),
+      copyFoundryMacroBtn: document.getElementById("copyFoundryMacroBtn"),
       exportResolution: document.getElementById("exportResolution"),
       exportTitle: document.getElementById("exportTitle"),
       exportLegend: document.getElementById("exportLegend"),
@@ -2118,7 +2120,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     async function exportImage(options) {
       const type = options.type || "image/png";
-      const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[type] || "png";
+      const uvtt = type === "application/uvtt+json";
+      const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/uvtt+json": "uvtt" }[type] || "png";
       const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase() + "." + extension;
       const dpr = window.devicePixelRatio || 1;
       const old = {
@@ -2143,11 +2146,15 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const maxExportSide = 6144;
       const maxScaleByWidth = maxExportSide / (state.hexSize * (1.5 * (state.cols - 1) + 3.8));
       const maxScaleByHeight = maxExportSide / (state.hexSize * (Math.sqrt(3) * (state.rows + .5) + 1.8));
-      const exportScale = Math.min(requestedScale, maxScaleByWidth, maxScaleByHeight);
+      // Para a grade hexagonal, pixels_per_grid e a altura do hex.
+      // Quantizar a escala mantem a imagem e os metadados UVTT em sincronia.
+      const limitedScale = Math.min(requestedScale, maxScaleByWidth, maxScaleByHeight);
+      const pixelsPerGrid = Math.max(1, Math.floor(state.hexSize * Math.sqrt(3) * limitedScale));
+      const exportScale = uvtt ? pixelsPerGrid / (state.hexSize * Math.sqrt(3)) : limitedScale;
       const size = state.hexSize * exportScale;
-      const margin = Math.round(size * .9);
-      const titleHeight = options.title ? 82 : 0;
-      const groups = options.legend ? legendGroups(options) : [];
+      const margin = uvtt ? 0 : Math.round(size * .9);
+      const titleHeight = !uvtt && options.title ? 82 : 0;
+      const groups = !uvtt && options.legend ? legendGroups(options) : [];
       const legendHeight = groups.length ? getLegendHeight(groups, exportScale) : 0;
       const width = Math.ceil(size * (1.5 * (state.cols - 1) + 2) + margin * 2);
       const mapHeight = Math.ceil(titleHeight + size * Math.sqrt(3) * (state.rows + .5) + margin * 2);
@@ -2160,8 +2167,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         state.scale = exportScale;
         state.selected = null;
         state.currentPath = null;
-        state.exportBackground = options.background || type === "image/jpeg";
-        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: Boolean(options.grid) };
+        state.exportBackground = uvtt || options.background || type === "image/jpeg";
+        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: !uvtt && Boolean(options.grid) };
         state.exportMapTexts = Boolean(options.mapTexts);
         state.exportLandmarks = Boolean(options.landmarks);
         state.exportSettlements = Boolean(options.settlements);
@@ -2198,10 +2205,27 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           imageCtx.restore();
         }
         if (groups.length) drawExportLegend(imageCtx, width, mapHeight, groups, exportScale);
-        const blob = await PngExportService.toBlob(image, type);
+        const blob = uvtt
+          ? new Blob([JSON.stringify(UvttExportService.createPayload(image, pixelsPerGrid))], { type: "application/json" })
+          : await PngExportService.toBlob(image, type);
         exportProgress.update(100, "Preparando download...");
         const link = DownloadService.createDownloadLink(blob, filename);
+        if (uvtt) link.textContent = "Baixar UVTT pronto";
         els.saveStatus.replaceChildren(link);
+        if (uvtt) {
+          const macroButton = document.createElement("button");
+          macroButton.type = "button";
+          macroButton.textContent = "Copiar macro Foundry";
+          macroButton.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(UvttExportService.foundryMacro);
+              macroButton.textContent = "Macro copiada";
+            } catch (error) {
+              macroButton.textContent = "Falha ao copiar";
+            }
+          });
+          els.saveStatus.append(" · ", macroButton);
+        }
         link.click();
       } catch (error) {
         console.error("Falha ao exportar imagem", error);
@@ -2516,7 +2540,18 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.exportSettlements.checked = true;
       els.exportFortifications.checked = true;
       els.exportMapTexts.checked = true;
+      els.copyFoundryMacroBtn.textContent = "Copiar macro da grade hexagonal";
+      updateUvttExportOptions();
       openFeatureModal(els.exportOptionsModal);
+    }
+
+    function updateUvttExportOptions() {
+      const uvtt = els.exportFormat.value === "application/uvtt+json";
+      els.uvttExportHint.hidden = !uvtt;
+      els.copyFoundryMacroBtn.hidden = !uvtt;
+      [els.exportTitle, els.exportLegend, els.exportGrid].forEach(input => {
+        input.disabled = uvtt;
+      });
     }
 
     function handleToolShortcut(event) {
@@ -2762,6 +2797,15 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.saveBtn.addEventListener("click", saveLocal);
       els.exportJsonBtn.addEventListener("click", () => download("mapa-hex.json", JSON.stringify(exportState(), null, 2), "application/json"));
       els.exportPngBtn.addEventListener("click", openExportOptions);
+      els.exportFormat.addEventListener("change", updateUvttExportOptions);
+      els.copyFoundryMacroBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(UvttExportService.foundryMacro);
+          els.copyFoundryMacroBtn.textContent = "Macro copiada";
+        } catch (error) {
+          els.copyFoundryMacroBtn.textContent = "Falha ao copiar; verifique a permissão do navegador";
+        }
+      });
       els.confirmExportBtn.addEventListener("click", () => {
         els.exportOptionsModal.hidden = true;
         exportImage({
