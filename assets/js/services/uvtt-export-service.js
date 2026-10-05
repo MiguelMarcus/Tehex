@@ -37,9 +37,12 @@
 if (!scene) return ui.notifications.warn("Abra a cena importada antes de executar a macro.");
 await scene.update({
   "grid.type": CONST.GRID_TYPES.HEXODDQ,
-  "grid.size": ${pixelsPerGrid}
+  "grid.size": ${pixelsPerGrid},
+  "padding": 0,
+  "shiftX": 0,
+  "shiftY": 0
 });
-ui.notifications.info("Grade Tehex: Hexagonal Columns, Odd, ${pixelsPerGrid} px.");`;
+ui.notifications.info("Grade Tehex alinhada: Columns, Odd, ${pixelsPerGrid} px, sem padding ou offset.");`;
   }
 
   window.UvttExportService = Object.freeze({ createPayload, foundryMacro });

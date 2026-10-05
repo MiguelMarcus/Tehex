@@ -87,7 +87,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     const exportFoundryBtn = document.createElement("button");
     exportFoundryBtn.id = "exportFoundryBtn";
     exportFoundryBtn.type = "button";
-    exportFoundryBtn.textContent = "Foundry: UVTT + macro";
+    exportFoundryBtn.textContent = "Foundry: PNG alinhado";
     document.getElementById("optionsMenu").appendChild(exportFoundryBtn);
 
     function addButtonIcon(id, icon) {
@@ -2138,8 +2138,12 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     async function exportImage(options) {
       const type = options.type || "image/png";
       const uvtt = type === "application/uvtt+json";
-      const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/uvtt+json": "uvtt" }[type] || "png";
-      const filename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase() + "." + extension;
+      const foundryPng = type === "image/png+foundry";
+      const foundryReady = uvtt || foundryPng;
+      const mimeType = foundryPng ? "image/png" : type;
+      const extension = { "image/png": "png", "image/png+foundry": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/uvtt+json": "uvtt" }[type] || "png";
+      const basename = (state.mapName || "mapa-hex").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").toLowerCase();
+      const filename = basename + (foundryPng ? "-foundry" : "") + "." + extension;
       const dpr = window.devicePixelRatio || 1;
       const old = {
         width: canvas.width,
@@ -2162,14 +2166,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const grid = PngExportService.gridPlan({ resolution: Number(options.resolution) || 2.25, cols: state.cols, rows: state.rows, hexSize: state.hexSize });
       const pixelsPerGrid = grid.pixelsPerGrid;
       const exportScale = grid.scale;
-      if (uvtt && pixelsPerGrid < 50) {
+      if (foundryReady && pixelsPerGrid < 50) {
         els.saveStatus.textContent = "Mapa grande demais para a grade mínima de 50 px do Foundry. Reduza o mapa ou exporte PNG.";
         return;
       }
       const size = state.hexSize * exportScale;
-      const margin = uvtt ? 0 : Math.round(size * .9);
-      const titleHeight = !uvtt && options.title ? 82 : 0;
-      const groups = !uvtt && options.legend ? legendGroups(options) : [];
+      const margin = foundryReady ? 0 : Math.round(size * .9);
+      const titleHeight = !foundryReady && options.title ? 82 : 0;
+      const groups = !foundryReady && options.legend ? legendGroups(options) : [];
       const legendHeight = groups.length ? getLegendHeight(groups, exportScale) : 0;
       const width = Math.ceil(size * (1.5 * (state.cols - 1) + 2) + margin * 2);
       const mapHeight = Math.ceil(titleHeight + size * Math.sqrt(3) * (state.rows + .5) + margin * 2);
@@ -2182,8 +2186,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         state.scale = exportScale;
         state.selected = null;
         state.currentPath = null;
-        state.exportBackground = uvtt || options.background || type === "image/jpeg";
-        state.layers = { ...state.layers, coordinates: Boolean(options.coordinates), grid: !uvtt && Boolean(options.grid) };
+        state.exportBackground = foundryReady || options.background || type === "image/jpeg";
+        state.layers = { ...state.layers, coordinates: !foundryReady && Boolean(options.coordinates), grid: !foundryReady && Boolean(options.grid) };
         state.exportMapTexts = Boolean(options.mapTexts);
         state.exportLandmarks = Boolean(options.landmarks);
         state.exportSettlements = Boolean(options.settlements);
@@ -2210,7 +2214,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           }
         });
         const imageCtx = image.getContext("2d");
-        if (!uvtt && options.title) {
+        if (!foundryReady && options.title) {
           imageCtx.save();
           imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
           imageCtx.textAlign = "center";
@@ -2222,12 +2226,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         if (groups.length) drawExportLegend(imageCtx, width, mapHeight, groups, exportScale);
         const blob = uvtt
           ? new Blob([JSON.stringify(UvttExportService.createPayload(image, pixelsPerGrid))], { type: "application/json" })
-          : await PngExportService.toBlob(image, type);
+          : await PngExportService.toBlob(image, mimeType);
         exportProgress.update(100, "Preparando download...");
         const link = DownloadService.createDownloadLink(blob, filename);
         if (uvtt) link.textContent = "Baixar UVTT pronto";
+        if (foundryPng) link.textContent = "Baixar PNG alinhado ao Foundry";
         els.saveStatus.replaceChildren(link);
-        els.saveStatus.append(" · Foundry: ", pixelsPerGrid + " px · Hexagonal Columns, Odd");
+        if (foundryReady) els.saveStatus.append(" · Foundry: ", pixelsPerGrid + " px · Hexagonal Columns, Odd · Padding 0 · Offset 0, 0");
         if (uvtt) {
           const macroButton = document.createElement("button");
           macroButton.type = "button";
@@ -2564,6 +2569,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     function updateUvttExportOptions() {
       const uvtt = els.exportFormat.value === "application/uvtt+json";
+      const foundryPng = els.exportFormat.value === "image/png+foundry";
+      const foundryReady = uvtt || foundryPng;
       const grid = PngExportService.gridPlan({ resolution: Number(els.exportResolution.value), cols: state.cols, rows: state.rows, hexSize: state.hexSize });
       const size = grid.pixelsPerGrid / Math.sqrt(3);
       const margin = Math.round(size * .9);
@@ -2571,15 +2578,20 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const baseInfo = `Foundry: Hexagonal Columns, Odd · Tamanho da grade: ${grid.pixelsPerGrid} px.` +
         (grid.limited ? ` Mapa grande: reduzido de ${grid.target} px para caber na exportação.` : "");
       els.foundryGridInfo.textContent = uvtt
-        ? baseInfo + " A macro aplica automaticamente o tipo e o tamanho da grade."
+        ? baseInfo + " A macro aplica tipo, tamanho, padding zero e remove offsets anteriores."
+        : foundryPng
+          ? baseInfo + " Imagem sem margem nem grade embutida: no Foundry use Padding 0 e Offset 0, 0."
         : baseInfo + ` Para este PNG com margem, use Offset da imagem: Horizontal ${-margin} px · Vertical ${-(margin + titleOffset)} px.`;
-      els.uvttExportHint.hidden = !uvtt;
+      els.uvttExportHint.hidden = !foundryReady;
+      els.uvttExportHint.textContent = foundryPng
+        ? "Esta imagem começa exatamente na origem da grade. No Foundry configure Hexagonal Columns, Odd, o tamanho indicado, Padding 0 e Offset 0, 0."
+        : "Ao exportar, a macro será copiada junto com o download do UVTT. Após importar no Foundry v14, execute-a na cena aberta para aplicar a grade hexagonal.";
       els.copyFoundryMacroBtn.hidden = !uvtt;
-      els.confirmExportBtn.textContent = uvtt ? "Exportar UVTT e copiar macro" : "Exportar";
-      els.confirmExportBtn.disabled = uvtt && grid.pixelsPerGrid < 50;
-      if (uvtt && grid.pixelsPerGrid < 50) els.foundryGridInfo.textContent += " O Foundry exige no mínimo 50 px; reduza o mapa para usar UVTT.";
-      [els.exportTitle, els.exportLegend, els.exportGrid].forEach(input => {
-        input.disabled = uvtt;
+      els.confirmExportBtn.textContent = uvtt ? "Exportar UVTT e copiar macro" : foundryPng ? "Exportar PNG para Foundry" : "Exportar";
+      els.confirmExportBtn.disabled = foundryReady && grid.pixelsPerGrid < 50;
+      if (foundryReady && grid.pixelsPerGrid < 50) els.foundryGridInfo.textContent += " O Foundry exige no mínimo 50 px; reduza o mapa para exportar para o Foundry.";
+      [els.exportTitle, els.exportLegend, els.exportGrid, els.exportCoordinates].forEach(input => {
+        input.disabled = foundryReady;
       });
     }
 
@@ -2840,7 +2852,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.exportPngBtn.addEventListener("click", () => openExportOptions("image/png"));
       els.exportFoundryBtn.addEventListener("click", () => {
         els.optionsMenu.hidden = true;
-        openExportOptions("application/uvtt+json");
+        openExportOptions("image/png+foundry");
       });
       els.exportFormat.addEventListener("change", updateUvttExportOptions);
       els.exportResolution.addEventListener("change", updateUvttExportOptions);

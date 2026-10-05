@@ -8,7 +8,9 @@ Abra `https://miguelmarcus.github.io/Tehex/` em um navegador. O editor salva os 
 
 ## Foundry VTT v14
 
-Em **Opções → Exportar e importar → Foundry: UVTT + macro**, escolha a resolução e clique em **Exportar UVTT e copiar macro**. O arquivo será baixado e a macro será copiada. No Foundry, instale e habilite o módulo **Universal Battlemap Importer**, importe o `.uvtt` pela aba de Cenas e abra a cena criada. O arquivo inclui a imagem e a escala em pixels da grade.
+Em **Opções → Exportar e importar → Foundry: PNG alinhado**, baixe a imagem e use-a como fundo da cena. No Foundry, configure **Hexagonal Columns, Odd**, o tamanho mostrado no exportador, **Padding 0** e **Offset Background 0, 0**. Esse PNG não contém margem, título, legenda ou linhas de grade, portanto a grade nativa encaixa sem macro nem calibração manual.
+
+Como alternativa, no diálogo de exportação selecione **UVTT (Foundry)**. O arquivo será baixado e a macro será copiada. No Foundry, instale e habilite o módulo **Universal Battlemap Importer**, importe o `.uvtt` pela aba de Cenas e abra a cena criada. O arquivo inclui a imagem e a escala em pixels da grade.
 
 O formato UVTT não define o tipo de grade. Para ter hexágonos interativos alinhados ao mapa, crie uma macro do tipo Script no Foundry, cole o código copiado e execute-a com a cena importada aberta. É necessário fazer essa etapa uma vez para cada cena importada. A macro define **Hexagonal Columns, Odd** e o tamanho exato da exportação. O exportador deixa a grade visual fora da imagem UVTT para evitar linhas duplicadas.
 
