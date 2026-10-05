@@ -26,10 +26,21 @@
   }
 
   // Executar como macro de script no Foundry v14 apos importar o .uvtt.
-  const foundryMacro = `const scene = canvas.scene;
+  // Em uma grade hexagonal plana o tamanho do Foundry e a distancia curta
+  // (topo a base). Fixar o valor aqui evita que o importador escolha um
+  // tamanho padrao diferente do usado para renderizar a imagem.
+  function foundryMacro(pixelsPerGrid) {
+    if (!Number.isInteger(pixelsPerGrid) || pixelsPerGrid <= 0) {
+      throw new Error("Escala da grade invalida.");
+    }
+    return `const scene = canvas.scene;
 if (!scene) return ui.notifications.warn("Abra a cena importada antes de executar a macro.");
-await scene.update({ "grid.type": CONST.GRID_TYPES.HEXODDQ });
-ui.notifications.info("Grade hexagonal Tehex aplicada a " + scene.name + ".");`;
+await scene.update({
+  "grid.type": CONST.GRID_TYPES.HEXODDQ,
+  "grid.size": ${pixelsPerGrid}
+});
+ui.notifications.info("Grade Tehex: Hexagonal Columns, Odd, ${pixelsPerGrid} px.");`;
+  }
 
   window.UvttExportService = Object.freeze({ createPayload, foundryMacro });
 }());

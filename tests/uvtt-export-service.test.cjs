@@ -16,7 +16,9 @@ test("UVTT keeps image size and grid scale consistent", () => {
   assert.equal(data.resolution.map_size.y * 75, image.height);
   assert.equal(data.image, "cG5n");
   assert.equal(data.tehex.grid_type, "hex_odd_q");
-  assert.ok(service.foundryMacro.includes("CONST.GRID_TYPES.HEXODDQ"));
+  const macro = service.foundryMacro(75);
+  assert.ok(macro.includes("CONST.GRID_TYPES.HEXODDQ"));
+  assert.ok(macro.includes('"grid.size": 75'));
 });
 
 test("UVTT refuses invalid grid size and empty image", () => {

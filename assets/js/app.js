@@ -7,6 +7,15 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     window.AppShell.mountApp(document.getElementById("app"));
     WorkspaceFeatures.mount();
+    const exportResolutionSelect = document.getElementById("exportResolution");
+    [["1.25", "Normal — 70 px/hex"], ["2.25", "Alta — 120 px/hex"], ["3", "Muito alta — 160 px/hex"]].forEach(([value, label]) => {
+      exportResolutionSelect.querySelector(`option[value="${value}"]`).textContent = label;
+    });
+    const foundryGridInfo = document.createElement("p");
+    foundryGridInfo.id = "foundryGridInfo";
+    foundryGridInfo.className = "hint";
+    foundryGridInfo.setAttribute("role", "status");
+    exportResolutionSelect.closest(".feature-form-grid").after(foundryGridInfo);
 
     const reliefTool = document.createElement("button");
     reliefTool.dataset.tool = "relief";
@@ -366,6 +375,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       uvttExportHint: document.getElementById("uvttExportHint"),
       copyFoundryMacroBtn: document.getElementById("copyFoundryMacroBtn"),
       exportResolution: document.getElementById("exportResolution"),
+      foundryGridInfo: document.getElementById("foundryGridInfo"),
       exportTitle: document.getElementById("exportTitle"),
       exportLegend: document.getElementById("exportLegend"),
       exportBackground: document.getElementById("exportBackground"),
@@ -2149,15 +2159,13 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         exportSettlements: state.exportSettlements,
         exportFortifications: state.exportFortifications
       };
-      const requestedScale = Number(options.resolution) || 2.25;
-      const maxExportSide = 6144;
-      const maxScaleByWidth = maxExportSide / (state.hexSize * (1.5 * (state.cols - 1) + 3.8));
-      const maxScaleByHeight = maxExportSide / (state.hexSize * (Math.sqrt(3) * (state.rows + .5) + 1.8));
-      // Para a grade hexagonal, pixels_per_grid e a altura do hex.
-      // Quantizar a escala mantem a imagem e os metadados UVTT em sincronia.
-      const limitedScale = Math.min(requestedScale, maxScaleByWidth, maxScaleByHeight);
-      const pixelsPerGrid = Math.max(1, Math.floor(state.hexSize * Math.sqrt(3) * limitedScale));
-      const exportScale = uvtt ? pixelsPerGrid / (state.hexSize * Math.sqrt(3)) : limitedScale;
+      const grid = PngExportService.gridPlan({ resolution: Number(options.resolution) || 2.25, cols: state.cols, rows: state.rows, hexSize: state.hexSize });
+      const pixelsPerGrid = grid.pixelsPerGrid;
+      const exportScale = grid.scale;
+      if (uvtt && pixelsPerGrid < 50) {
+        els.saveStatus.textContent = "Mapa grande demais para a grade mínima de 50 px do Foundry. Reduza o mapa ou exporte PNG.";
+        return;
+      }
       const size = state.hexSize * exportScale;
       const margin = uvtt ? 0 : Math.round(size * .9);
       const titleHeight = !uvtt && options.title ? 82 : 0;
@@ -2202,7 +2210,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
           }
         });
         const imageCtx = image.getContext("2d");
-        if (options.title) {
+        if (!uvtt && options.title) {
           imageCtx.save();
           imageCtx.fillStyle = isOldSchool() ? "#171717" : "#4b3620";
           imageCtx.textAlign = "center";
@@ -2219,13 +2227,14 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         const link = DownloadService.createDownloadLink(blob, filename);
         if (uvtt) link.textContent = "Baixar UVTT pronto";
         els.saveStatus.replaceChildren(link);
+        els.saveStatus.append(" · Foundry: ", pixelsPerGrid + " px · Hexagonal Columns, Odd");
         if (uvtt) {
           const macroButton = document.createElement("button");
           macroButton.type = "button";
           macroButton.textContent = options.macroCopied ? "Macro copiada ✓" : "Copiar macro Foundry";
           macroButton.addEventListener("click", async () => {
             try {
-              await navigator.clipboard.writeText(UvttExportService.foundryMacro);
+              await navigator.clipboard.writeText(UvttExportService.foundryMacro(pixelsPerGrid));
               macroButton.textContent = "Macro copiada";
             } catch (error) {
               macroButton.textContent = "Falha ao copiar";
@@ -2555,9 +2564,20 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     function updateUvttExportOptions() {
       const uvtt = els.exportFormat.value === "application/uvtt+json";
+      const grid = PngExportService.gridPlan({ resolution: Number(els.exportResolution.value), cols: state.cols, rows: state.rows, hexSize: state.hexSize });
+      const size = grid.pixelsPerGrid / Math.sqrt(3);
+      const margin = Math.round(size * .9);
+      const titleOffset = els.exportTitle.checked ? 82 : 0;
+      const baseInfo = `Foundry: Hexagonal Columns, Odd · Tamanho da grade: ${grid.pixelsPerGrid} px.` +
+        (grid.limited ? ` Mapa grande: reduzido de ${grid.target} px para caber na exportação.` : "");
+      els.foundryGridInfo.textContent = uvtt
+        ? baseInfo + " A macro aplica automaticamente o tipo e o tamanho da grade."
+        : baseInfo + ` Para este PNG com margem, use Offset da imagem: Horizontal ${-margin} px · Vertical ${-(margin + titleOffset)} px.`;
       els.uvttExportHint.hidden = !uvtt;
       els.copyFoundryMacroBtn.hidden = !uvtt;
       els.confirmExportBtn.textContent = uvtt ? "Exportar UVTT e copiar macro" : "Exportar";
+      els.confirmExportBtn.disabled = uvtt && grid.pixelsPerGrid < 50;
+      if (uvtt && grid.pixelsPerGrid < 50) els.foundryGridInfo.textContent += " O Foundry exige no mínimo 50 px; reduza o mapa para usar UVTT.";
       [els.exportTitle, els.exportLegend, els.exportGrid].forEach(input => {
         input.disabled = uvtt;
       });
@@ -2565,7 +2585,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
 
     async function copyFoundryMacro() {
       try {
-        await navigator.clipboard.writeText(UvttExportService.foundryMacro);
+        const grid = PngExportService.gridPlan({ resolution: Number(els.exportResolution.value), cols: state.cols, rows: state.rows, hexSize: state.hexSize });
+        await navigator.clipboard.writeText(UvttExportService.foundryMacro(grid.pixelsPerGrid));
         els.copyFoundryMacroBtn.textContent = "Macro copiada";
         return true;
       } catch (error) {
@@ -2822,6 +2843,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         openExportOptions("application/uvtt+json");
       });
       els.exportFormat.addEventListener("change", updateUvttExportOptions);
+      els.exportResolution.addEventListener("change", updateUvttExportOptions);
+      [els.exportTitle, els.exportLegend, els.exportGrid].forEach(input => input.addEventListener("change", updateUvttExportOptions));
       els.copyFoundryMacroBtn.addEventListener("click", copyFoundryMacro);
       els.confirmExportBtn.addEventListener("click", async () => {
         const uvtt = els.exportFormat.value === "application/uvtt+json";
