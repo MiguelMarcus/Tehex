@@ -75,6 +75,11 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     const brand = document.querySelector(".brand");
     brand.querySelector(".mark + div").classList.add("brand-copy");
     brand.appendChild(document.querySelector(".options-wrap"));
+    const exportFoundryBtn = document.createElement("button");
+    exportFoundryBtn.id = "exportFoundryBtn";
+    exportFoundryBtn.type = "button";
+    exportFoundryBtn.textContent = "Foundry: UVTT + macro";
+    document.getElementById("optionsMenu").appendChild(exportFoundryBtn);
 
     function addButtonIcon(id, icon) {
       const button = document.getElementById(id);
@@ -95,6 +100,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         undoBtn: "arrow-counterclockwise",
         redoBtn: "arrow-clockwise",
         exportPngBtn: "image",
+        exportFoundryBtn: "hexagon",
         importBtn: "box-arrow-in-down",
         zoomOut: "dash-lg",
         zoomIn: "plus-lg",
@@ -108,7 +114,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
     const menuGroups = [
       ["Projeto", ["menuNewMapBtn", "savedMapsBtn"]],
       ["Aparência", ["mapOptionsBtn", "layersBtn", "legendBtn", "styleLibraryBtn"]],
-      ["Exportar e importar", ["exportPngBtn", "exportJsonBtn", "importBtn"]],
+      ["Exportar e importar", ["exportPngBtn", "exportFoundryBtn", "exportJsonBtn", "importBtn"]],
       ["Ajuda", ["helpBtn"]]
     ];
     menuGroups.forEach(([label, ids]) => {
@@ -314,6 +320,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       saveStatus: document.getElementById("saveStatus"),
       exportJsonBtn: document.getElementById("exportJsonBtn"),
       exportPngBtn: document.getElementById("exportPngBtn"),
+      exportFoundryBtn: document.getElementById("exportFoundryBtn"),
       importBtn: document.getElementById("importBtn"),
       importFile: document.getElementById("importFile"),
       zoomIn: document.getElementById("zoomIn"),
@@ -2215,7 +2222,7 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
         if (uvtt) {
           const macroButton = document.createElement("button");
           macroButton.type = "button";
-          macroButton.textContent = "Copiar macro Foundry";
+          macroButton.textContent = options.macroCopied ? "Macro copiada ✓" : "Copiar macro Foundry";
           macroButton.addEventListener("click", async () => {
             try {
               await navigator.clipboard.writeText(UvttExportService.foundryMacro);
@@ -2532,7 +2539,8 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       if (colors) renderColorLibrary();
     }
 
-    function openExportOptions() {
+    function openExportOptions(format = "image/png") {
+      els.exportFormat.value = format;
       els.exportCoordinates.checked = state.layers.coordinates;
       els.exportGrid.checked = state.layers.grid;
       els.exportBackground.checked = true;
@@ -2549,9 +2557,21 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       const uvtt = els.exportFormat.value === "application/uvtt+json";
       els.uvttExportHint.hidden = !uvtt;
       els.copyFoundryMacroBtn.hidden = !uvtt;
+      els.confirmExportBtn.textContent = uvtt ? "Exportar UVTT e copiar macro" : "Exportar";
       [els.exportTitle, els.exportLegend, els.exportGrid].forEach(input => {
         input.disabled = uvtt;
       });
+    }
+
+    async function copyFoundryMacro() {
+      try {
+        await navigator.clipboard.writeText(UvttExportService.foundryMacro);
+        els.copyFoundryMacroBtn.textContent = "Macro copiada";
+        return true;
+      } catch (error) {
+        els.copyFoundryMacroBtn.textContent = "Falha ao copiar; verifique a permissão do navegador";
+        return false;
+      }
     }
 
     function handleToolShortcut(event) {
@@ -2796,20 +2816,20 @@ const fortificationPlaceTypes = new Set(["castle", "citadel", "tower", "whiteTow
       els.toggleRightPanelBtn.addEventListener("click", toggleRightPanel);
       els.saveBtn.addEventListener("click", saveLocal);
       els.exportJsonBtn.addEventListener("click", () => download("mapa-hex.json", JSON.stringify(exportState(), null, 2), "application/json"));
-      els.exportPngBtn.addEventListener("click", openExportOptions);
-      els.exportFormat.addEventListener("change", updateUvttExportOptions);
-      els.copyFoundryMacroBtn.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(UvttExportService.foundryMacro);
-          els.copyFoundryMacroBtn.textContent = "Macro copiada";
-        } catch (error) {
-          els.copyFoundryMacroBtn.textContent = "Falha ao copiar; verifique a permissão do navegador";
-        }
+      els.exportPngBtn.addEventListener("click", () => openExportOptions("image/png"));
+      els.exportFoundryBtn.addEventListener("click", () => {
+        els.optionsMenu.hidden = true;
+        openExportOptions("application/uvtt+json");
       });
-      els.confirmExportBtn.addEventListener("click", () => {
+      els.exportFormat.addEventListener("change", updateUvttExportOptions);
+      els.copyFoundryMacroBtn.addEventListener("click", copyFoundryMacro);
+      els.confirmExportBtn.addEventListener("click", async () => {
+        const uvtt = els.exportFormat.value === "application/uvtt+json";
+        const macroCopied = uvtt ? await copyFoundryMacro() : false;
         els.exportOptionsModal.hidden = true;
         exportImage({
           type: els.exportFormat.value,
+          macroCopied,
           resolution: Number(els.exportResolution.value),
           title: els.exportTitle.checked,
           legend: els.exportLegend.checked,
